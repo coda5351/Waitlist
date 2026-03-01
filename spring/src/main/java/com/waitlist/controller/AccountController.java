@@ -56,21 +56,6 @@ public class AccountController {
         }
     }
 
-    @GetMapping("/{id}/waitlist-status")
-    public ResponseEntity<Map<String, Object>> getWaitlistStatus(@PathVariable Long id) {
-        boolean open = accountService.isWaitlistOpen(id);
-        Account account = accountService.getAccountById(id);
-        int estimate = accountService.getEstimatedWaitMinutes();
-        Map<String, Object> body = Map.of(
-                "open", open,
-                "enabled", account.isWaitlistEnabled(),
-                "openTime", account.getWaitlistOpenTime(),
-                "closeTime", account.getWaitlistCloseTime(),
-                "serviceHours", account.getServiceHours(),
-                "estimatedWait", estimate
-        );
-        return ResponseEntity.ok(body);
-    }
 
     /**
      * Fetch all configured message templates for an account.  The frontend
