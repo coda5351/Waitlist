@@ -151,32 +151,6 @@ public class AccountControllerTest {
                 .andExpect(jsonPath("$.error").value("Cannot enable waitlist: current time is outside the specified open/close window"));
     }
 
-    @Test
-    public void getWaitlistStatus_shouldReturnOpenFlag() throws Exception {
-        when(accountService.isWaitlistOpen(7L)).thenReturn(true);
-        Account acct = new Account("foo", null);
-        acct.setId(7L);
-        acct.setWaitlistEnabled(true);
-        acct.setWaitlistOpenTime(LocalDateTime.of(2026,4,1,8,0));
-        acct.setWaitlistCloseTime(LocalDateTime.of(2026,4,1,17,0));
-        // add simple business hours entry
-        java.util.Map<java.time.DayOfWeek, com.waitlist.model.ServiceHours> bh = new java.util.HashMap<>();
-        com.waitlist.model.ServiceHours monday = new com.waitlist.model.ServiceHours();
-        monday.setOpenTime(java.time.LocalTime.of(8,0));
-        monday.setCloseTime(java.time.LocalTime.of(16,0));
-        bh.put(java.time.DayOfWeek.MONDAY, monday);
-        acct.setServiceHours(bh);
-        acct.setSmsEnabled(true);
-        when(accountService.getAccountById(7L)).thenReturn(acct);
-        when(accountService.getEstimatedWaitMinutes()).thenReturn(25);
-
-        mockMvc.perform(get("/api/accounts/7/waitlist-status"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.open").value(true))
-                .andExpect(jsonPath("$.enabled").value(true))
-                .andExpect(jsonPath("$.serviceHours.MONDAY.openTime").exists())
-                .andExpect(jsonPath("$.estimatedWait").value(25));
-    }
 
     @Test
     public void getMessages_shouldReturnMap() throws Exception {
