@@ -191,7 +191,7 @@ async function loadEntries() {
 
 async function fetchStatus() {
   try {
-    const resp = await api.get('/accounts/1/waitlist-status')
+    const resp = await api.get(`/waitlists/status`)
     if (resp.ok) {
       const newStatus = await resp.json()
       // detect transition from enabled->disabled when user has an entry
