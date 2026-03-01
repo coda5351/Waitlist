@@ -1,0 +1,67 @@
+/* Shared styles for account tab components */
+
+.info-section {
+  margin-bottom: 1.25rem;
+}
+
+.info-section h3 {
+  color: var(--theme-color, #333);
+  margin-bottom: 0.75rem;
+  font-size: 1.05rem;
+}
+
+.info-section p {
+  color: #666;
+  margin: 0.35rem 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-logout {
+  padding: 0.6rem 1.1rem;
+  background-color: #ff6b6b;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.color-options {
+  display: flex;
+  gap: 1rem;
+}
+
+.color-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f5f5f5;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+}
+
+.color-option:hover {
+  border-color: #999;
+}
+
+.color-option.active {
+  border-color: #333;
+  background: #e8e8e8;
+  font-weight: 600;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
