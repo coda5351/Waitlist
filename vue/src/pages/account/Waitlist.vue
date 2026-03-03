@@ -402,8 +402,7 @@ function populate() {
 
 async function fetchStatus() {
   try {
-    const id = user.value?.account?.id || 1
-    const resp = await api.get(`/accounts/${id}/waitlist-status`)
+    const resp = await api.get(`/waitlists/status`)
     if (resp.ok) status.value = await resp.json()
   } catch (err) {}
 }
