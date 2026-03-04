@@ -6,6 +6,9 @@
     <p v-if="status">
       <strong>Status:</strong> {{ status.enabled ? (status.open ? 'Open' : 'Closed') : 'Disabled' }}<br />
       <RouterLink v-if="status.enabled" :to="`/waitlist/join/${user.account.code}`" class="link-inline" target="_blank">View public waitlist page</RouterLink>
+      <div v-if="qrCodeUrl" class="qr-container">
+        <img :src="qrCodeUrl" alt="QR code for public waitlist" />
+      </div>
     </p>
 
     <div v-if="waitlistActive">
@@ -133,16 +136,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, watchEffect } from 'vue'
 import { useStore } from 'vuex'
 import { error as notifyError } from '@/utils/notify'
 import { api, throwIfNotOk, getApiUrl } from '@/utils/api'
 import DataTable from '@/components/DataTable.vue'
 import { formatTime } from '@/utils/dateFormatter'
 import { formatPhoneNumber, phoneLink } from '@/utils/phoneFormatter'
+import { toDataURL } from 'qrcode'
 
 const store = useStore()
 const user = computed(() => store.getters.user)
+
+// qr code data url for public waitlist link
+const qrCodeUrl = ref('')
 
 const waitlistEnabled = ref(false)
 const waitlistActive = computed(() => status.value?.enabled && status.value?.open)
@@ -475,6 +482,23 @@ onMounted(async () => {
   }
 })
 
+// regenerate the QR code whenever the account code changes
+async function updateQRCode() {
+  const code = user.value?.account?.code
+  if (code) {
+    const fullUrl = `${window.location.origin}/waitlist/join/${code}`
+    try {
+      qrCodeUrl.value = await toDataURL(fullUrl)
+    } catch (err) {
+      console.error('failed to generate QR code', err)
+      qrCodeUrl.value = ''
+    }
+  } else {
+    qrCodeUrl.value = ''
+  }
+}
+watch(() => user.value?.account?.code, updateQRCode, { immediate: true })
+
 onUnmounted(() => {
   if (source) source.close()
   if (notifyTimer) clearInterval(notifyTimer)
@@ -624,6 +648,17 @@ input[type="checkbox"] {
   margin-right: 8px;
   accent-color: var(--theme-color, #4CAF50);
   transform: scale(1.5);
+}
+
+/* QR code image styling */
+.qr-container {
+  margin-top: 0.5rem;
+}
+.qr-container img {
+  max-width: 200px;
+  height: auto;
+  display: block;
+  margin: 0.5rem auto;
 }
 
 </style>
