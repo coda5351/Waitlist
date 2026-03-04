@@ -18,4 +18,6 @@ public interface EntryRepository extends JpaRepository<Entry, Long> {
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("update Entry e set e.active = false where e.active = true")
     void deactivateAll();
+
+    List<Entry> findAllByAccountIdAndActiveTrue(Long accountId);
 }

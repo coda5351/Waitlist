@@ -1,16 +1,16 @@
 <template>
   <div class="waitlist-page">
-    <h2>Join the Waitlist</h2>
+    <h2>{{ currentAction?.toLowerCase() == 'join' ? 'Join' : 'View' }} the Waitlist</h2>
 
     <p v-if="status">
-      <em>Current status: <strong>{{ status.enabled ? (status.open ? 'Open' : 'Closed') : 'Disabled' }}</strong></em>
+      <em>Current status: <strong>{{ status.open ? 'Open' : 'Closed' }}</strong></em>
     </p>
-    <p v-if="status && status.enabled && status.open && status.estimatedWait !== undefined">
+    <p v-if="showWaitTimeMessage">
       <em>Approximate wait time: <strong>{{ status.estimatedWait }} minutes</strong></em>
     </p>
 
     <!-- show form if waitlist is enabled and open, and user doesn't have an active entry -->
-    <div v-if="status && status.enabled && status.open && !hideForm" class="form-container">
+    <div v-if="showWaitlistJoinForm" class="form-container">
       <div class="form-wrapper">
         <div class="form-card">
           <h1>Sign up</h1>
@@ -33,6 +33,10 @@
               <label>Party size:</label>
               <input type="number" v-model.number="form.partySize" min="1" />
             </div>
+            <div class="form-group">
+              <label>Waitlist Code:</label>
+              <input type="text" disabled v-model.number="currentCode" />
+            </div>
             <button :disabled="!isFormValid" type="submit">Join</button>
           </form>
         </div>
@@ -40,31 +44,35 @@
     </div>
 
     <!-- if waitlist is disabled or closed, show message -->
-    <div v-if="status && status.enabled && !status.open" class="ready-message warning-message" >
+    <div v-if="showDisabledMessageComputed || showDisabledMessage" class="ready-message warning-message" >
       <h3>The waitlist is currently closed.</h3>
       <p>Please check back later or ask the host for more information.</p>
     </div>
 
     <!-- show ready message if notified -->
-    <div v-if="status && status.enabled && status.open && tableReady" class="ready-message">
-      <h3>{{ readyMessage }}</h3>
+    <div v-if="showReadyMessage" class="ready-message">
+      <h3>Your table is ready -- please proceed to the host stand.</h3>
+    </div>
+
+    <!-- show left message if user has left the waitlist -->
+    <div v-if="showLeftMessage" class="ready-message">
+      <h3>You have left the waitlist -- have a nice day!</h3>
     </div>
 
     <!-- if user is missing from list show warning that they may have been called -->
-    <div v-if="status && status.enabled && status.open && missingEntry" class="ready-message warning-message">
+    <div v-if="showMissingEntryMessage" class="ready-message warning-message">
       <h3>Your table has already been called or you are not on the list.</h3>
       <p>Sign up again to join the wait list.</p>
-      <button class="btn-save" @click="onJoinAgain">Join waitlist</button>
     </div>
 
     <!-- waitlist table -->
-    <div v-if="status && status.enabled && status.open && !tableReady && currentEntryId && entries.length && !missingEntry" class="list">
+    <div v-if="showWaitlistTable" class="list">
       <h3>Current Waitlist</h3>
       <DataTable :columns="columns" :rows="entries">
         <template #row="{ row }">
-          <tr :class="{ 'highlighted-row': currentEntryId && row.code === currentEntryId }">
+          <tr :class="{ 'highlighted-row': currentCode && row.code === currentCode }">
             <td>
-              <button v-if="currentEntryId && row.code === currentEntryId"
+              <button v-if="currentCode && row.code === currentCode"
                       @click="confirmLeave(row.code)"
                       class="btn-cancel"
                       style="margin-left:0.5rem;"
@@ -74,7 +82,7 @@
             </td>
             <td>{{ row.idx }}</td>
             <td>
-              {{ (currentEntryId && row.code !== currentEntryId)
+              {{ (currentCode && row.code !== currentCode)
                   ? row.name.slice(0,2) + '...' 
                   : row.name }}
             </td>
@@ -122,9 +130,46 @@ const showDisabledMessage = ref(false)
 const wasEnabled = ref<boolean | null>(null)
 const form = ref({ name: '', phone: '', partySize: 1 })
 const tableReady = ref(false)
-const readyMessage = ref('')
 const missingEntry = ref(false)
 const listDisabledNotice = ref(false)
+const showLeftMessage = ref(false)
+
+const showWaitTimeMessage = computed(() => {
+  return status.value && status.value.open && status.value.estimatedWait !== undefined && !tableReady.value
+})
+const showWaitlistJoinForm = computed(() => {
+  return showWaitTimeMessage.value && isCurrentActionJoin.value
+})
+const showDisabledMessageComputed = computed(() => {
+  return status.value && !status.value.open
+})
+const showReadyMessage = computed(() => {
+  return tableReady.value && !isCurrentActionJoin.value
+})
+const showWaitlistTable = computed(() => {
+  return entries.value.length > 0 && !isCurrentActionJoin.value && !tableReady.value
+})
+const showMissingEntryMessage = computed(() => {
+  return missingEntry.value && !showLeftMessage.value
+})
+
+
+const route = useRoute()
+const router = useRouter()
+const currentCode = computed(() => {
+  if (route.params.code) {
+    return String(route.params.code)
+  }
+  return route.query.code ? String(route.query.code) : null
+})
+const currentAction = computed(() => {
+  if (route.params.action) {
+    return String(route.params.action)
+  }
+  return route.params.action ? String(route.params.action) : null
+})
+const isCurrentActionJoin = computed(() => currentAction.value?.toLowerCase() === 'join')
+
 
 // simple US phone number validator (allows formats like 123-456-7890, (123) 456-7890, 1234567890)
 function isUSPhoneNumber(phone: string) {
@@ -140,17 +185,6 @@ const isFormValid = computed(() => {
   )
 })
 
-const route = useRoute()
-const router = useRouter()
-const currentEntryId = computed(() => {
-  // prefer path parameter but fall back to query
-  if (route.params.entry) {
-    return String(route.params.entry)
-  }
-  return route.query.entry ? String(route.query.entry) : null
-})
-const hideForm = computed(() => !!currentEntryId.value)
-
 // allow the user to leave their own spot
 function confirmLeave(code: string) {
   leaveTargetId.value = code
@@ -162,8 +196,8 @@ async function performLeave() {
   try {
     const resp = await api.delete(`/entries/${leaveTargetId.value}`)
     await throwIfNotOk(resp)
-    entries.value = entries.value.filter(e => e.code !== leaveTargetId.value)
-    router.push({ path: '/waitlist', query: {} })
+    entries.value = []
+    showLeftMessage.value = true
   } catch (e) {
     console.error('leave spot failed', e)
   } finally {
@@ -172,30 +206,14 @@ async function performLeave() {
   }
 }
 
-async function loadEntries() {
-  try {
-    const resp = await api.get('/entries')
-    if (resp.ok) {
-      const data = await resp.json()
-      entries.value = data.map((e: any, i: number) => ({ ...e, idx: i + 1, timestamp: formatTime(e.timestamp) }))
-    } else {
-      console.warn('loadEntries status', resp.status)
-    }
-  } catch (err) {
-    console.error('loadEntries error', err)
-  } finally {
-    // after updating entries, determine if the current entry still exists
-    checkEntryPresence()
-  }
-}
-
 async function fetchStatus() {
   try {
-    const resp = await api.get(`/waitlists/status`)
+    const url = `/waitlists/${isCurrentActionJoin.value ? '' : 'entry/'}${currentCode.value}/status`
+    const resp = await api.get(url)
     if (resp.ok) {
       const newStatus = await resp.json()
       // detect transition from enabled->disabled when user has an entry
-      if (wasEnabled.value && newStatus && !newStatus.enabled && currentEntryId.value) {
+      if (wasEnabled.value && newStatus && !newStatus.enabled && currentCode.value) {
         showDisabledMessage.value = true
       }
       status.value = newStatus
@@ -204,17 +222,19 @@ async function fetchStatus() {
       if (newStatus.enabled && newStatus.open) {
         listDisabledNotice.value = false
       }
-    } else {
-      console.warn('fetchStatus status', resp.status)
+      entries.value = newStatus.entries?.map((e: any, i: number) => ({ ...e, idx: i + 1, timestamp: formatTime(e.timestamp) })) || []
+    } else if (resp.status === 404) {
+      // if we get a 404 it means the entry is missing, which could be because they were called or never existed
+      missingEntry.value = true
     }
-  } catch (err) {
-    console.error('fetchStatus error', err)
+  } catch (err: Promise<Response> | any) {
+    console.error('fetch status failed', err)
   }
 }
 
 async function submit() {
   try {
-    const resp = await api.post('/entries', form.value)
+    const resp = await api.post(`/entries/create/${currentCode.value}`, form.value)
     await throwIfNotOk(resp)
     const json = await resp.json()
     form.value.name = ''
@@ -222,11 +242,10 @@ async function submit() {
     form.value.partySize = 1
     if (json && json.code) {
       // update URL to include the code as a path segment (and clear query param)
-      router.replace({ path: `/waitlist/${json.code}` })
+      router.replace({ path: `/waitlist/view/${json.code}` })
       // subscribe to updates now that we have an id
       initEventSource()
     }
-    loadEntries()
   } catch (err: any) {
     console.error(err)
     const msg = err?.message || ''
@@ -247,18 +266,11 @@ function checkEntryPresence() {
     missingEntry.value = false
     return
   }
-  if (currentEntryId.value) {
-    missingEntry.value = !entries.value.some(e => e.code === currentEntryId.value)
+  if (currentCode.value) {
+    missingEntry.value = !entries.value.some(e => e.code === currentCode.value)
   } else {
     missingEntry.value = false
   }
-}
-
-function onJoinAgain() {
-  tableReady.value = false
-  readyMessage.value = ''
-  missingEntry.value = false
-  router.push('/waitlist')
 }
 
 function initEventSource() {
@@ -296,9 +308,8 @@ function initEventSource() {
     })
     source.addEventListener('notified-entry', (e: MessageEvent) => {
       const id = String(e.data)
-      if (currentEntryId.value === id) {
+      if (currentCode.value === id) {
         tableReady.value = true
-        readyMessage.value = 'Your table is ready – please proceed to the host stand.'
       }
     })
     source.addEventListener('waitlist-disabled', () => {
@@ -311,16 +322,13 @@ function initEventSource() {
     console.warn('could not open event stream', ex)
     // fall back to polling
     setInterval(() => {
-      loadEntries()
       fetchStatus()
     }, 30000)
   }
 }
 
 onMounted(async () => {
-  fetchStatus()
-  if (currentEntryId.value) {
-    loadEntries()
+  if (currentCode.value) {
     fetchStatus()
     initEventSource()
   }
