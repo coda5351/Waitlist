@@ -4,7 +4,8 @@
     <p>Configure the account's waitlist opening and closing schedule.</p>
 
     <p v-if="status">
-      <strong>Status:</strong> {{ status.enabled ? (status.open ? 'Open' : 'Closed') : 'Disabled' }}
+      <strong>Status:</strong> {{ status.enabled ? (status.open ? 'Open' : 'Closed') : 'Disabled' }}<br />
+      <RouterLink v-if="status.enabled" :to="`/waitlist/join/${user.account.code}`" class="link-inline" target="_blank">View public waitlist page</RouterLink>
     </p>
 
     <div v-if="waitlistActive">
@@ -40,8 +41,8 @@
 
     <div class="entries-list" v-if="waitlistActive">
       <h3>Current Waitlist Entries</h3>
-      <template v-if="entries.length">
-        <DataTable :columns="columns" :rows="entries">
+      <template v-if="waitlistHasEntries">
+        <DataTable :columns="columns" :rows="getEntries">
           <template #row="{ row }">
             <tr>
               <td>
@@ -162,7 +163,7 @@ watch(waitlistEnabled, (val, oldVal) => {
   // push updates will keep us in sync; if we just disabled the waitlist after it was
   // enabled, clear local entries so the table disappears.
   if (oldVal && !val) {
-    entries.value = []
+    status.value.entries = []
   }
   if (val) {
     // compute a default schedule; prefer service hours for today if available
@@ -203,10 +204,12 @@ const closeDate = ref('')
 const closeTime = ref('')
 const status = ref<any>(null)
 
-const entries = ref<any[]>([])
 const modalVisible = ref(false)
 const modalEntryId = ref<string | null>(null)
 const modalEntry = ref<any>(null)  // full entry data for modal display
+
+const waitlistHasEntries = computed(() => !!status.value?.entries?.length)
+const getEntries = computed(() => status.value?.entries || [])
 
 // confirmation dialog for disabling waitlist
 const disableDialogVisible = ref(false)
@@ -255,27 +258,11 @@ const columns = [
   { key: 'timestamp', label: 'Time' }
 ]
 
-async function loadEntries() {
-  try {
-    const resp = await api.get('/entries')
-    if (resp.ok) {
-      const data = await resp.json()
-      entries.value = data.map((e: any, i: number) => ({
-        ...e,
-        idx: i + 1,
-        timestamp: formatTime(e.timestamp)
-      }))
-    }
-  } catch (err) {
-    console.error('failed to load entries', err)
-  }
-}
-
 // when user clicks notify button we display a modal allowing
 // them to choose between sending the notification or indicating arrival.
 function openNotifyModal(code: string) {
   modalEntryId.value = code
-  modalEntry.value = entries.value.find(e => e.code === code) || null
+  modalEntry.value = status.value.entries.find((e: { code: string }) => e.code === code) || null
   modalVisible.value = true
 }
 
@@ -312,7 +299,7 @@ async function guestArrived(id: string) {
   } catch (e) {
     console.error('delete failed', e)
   }
-  entries.value = entries.value.filter(e => e.code !== id)
+  status.value.entries = status.value.entries.filter((e: any) => e.code !== id)
   closeModal()
 }
 
@@ -349,7 +336,6 @@ async function performDisable() {
     waitlistEnabled.value = false
     import('@/utils/notify').then(({ success }) => success('Waitlist disabled', { timeout: 2000 }))
     fetchStatus()
-    entries.value = []
   } catch (err: any) {
     notifyError(err?.message || 'Failed to disable waitlist', { timeout: false })
   } finally {
@@ -402,7 +388,7 @@ function populate() {
 
 async function fetchStatus() {
   try {
-    const resp = await api.get(`/waitlists/status`)
+    const resp = await api.get(`/waitlists/${user.value.account.code}/status`)
     if (resp.ok) status.value = await resp.json()
   } catch (err) {}
 }
@@ -446,7 +432,6 @@ let source: EventSource | null = null
 onMounted(async () => {
   populate()
   fetchStatus()
-  loadEntries()
   // establish server-sent event stream for live updates
   try {
     // build full URL via utility to keep base config logic
@@ -459,8 +444,8 @@ onMounted(async () => {
         status.value.estimatedWait = payload.estimatedWait
       }
       // compute formatted fields identical to initial load
-      const idx = entries.value.length + 1
-      entries.value.push({ ...entry, idx, timestamp: formatTime(entry.timestamp) })
+      const idx = status.value.entries.length + 1
+      status.value.entries.push({ ...entry, idx, timestamp: formatTime(entry.timestamp) })
     })
     source.addEventListener('deleted-entry', (e: MessageEvent) => {
       const payload = JSON.parse(e.data)
@@ -468,9 +453,9 @@ onMounted(async () => {
       if (payload.estimatedWait !== undefined && status.value) {
         status.value.estimatedWait = payload.estimatedWait
       }
-      entries.value = entries.value.filter(r => r.code !== code)
+      status.value.entries = status.value.entries.filter((r: any) => r.code !== code)
       // re-index rows
-      entries.value = entries.value.map((r,i) => ({ ...r, idx: i+1 }))
+      status.value.entries = status.value.entries.map((r: any, i: number) => ({ ...r, idx: i+1 }))
     })
     source.addEventListener('updated-entry', (e: MessageEvent) => {
       const payload = JSON.parse(e.data)
@@ -478,12 +463,12 @@ onMounted(async () => {
       if (payload.estimatedWait !== undefined && status.value) {
         status.value.estimatedWait = payload.estimatedWait
       }
-      entries.value = entries.value.map(r => r.code === updated.code ? { ...r, ...updated, timestamp: formatTime(updated.timestamp) } : r)
+      status.value.entries = status.value.entries.map((r: { code: any }) => r.code === updated.code ? { ...r, ...updated, timestamp: formatTime(updated.timestamp) } : r)
     })
     source.addEventListener('notified-entry', (e: MessageEvent) => {
       const code = String(e.data)
       // optionally flag entry locally so UI can show it has been notified
-      entries.value = entries.value.map(r => r.code === code ? { ...r, notified: true } : r)
+      status.value.entries = status.value.entries.map((r: { code: string }) => r.code === code ? { ...r, notified: true } : r)
     })
   } catch (ex) {
     console.warn('could not open event stream', ex)

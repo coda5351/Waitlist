@@ -2,6 +2,7 @@ package com.waitlist.controller;
 
 import com.twilio.exception.ApiException;
 import com.waitlist.model.Entry;
+import com.waitlist.dto.EntryDTO;
 import com.waitlist.service.EntryService;
 import com.waitlist.service.MessageTemplate;
 
@@ -51,25 +52,27 @@ public class EntryController {
     }
 
     private void emitNewEntry(Entry entry) {
+        EntryDTO dto = entryService.toDto(entry);
         Map<String,Object> payload = Map.of(
-                "entry", entry,
-                "estimatedWait", entryService.calculateEstimatedWaitMinutes()
+                "entry", dto,
+                "estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(entry.getAccount().getId()))
         );
         sendEvent("new-entry", payload);
     }
 
-    private void emitDeletedEntry(String code) {
+    private void emitDeletedEntry(Entry entry) {
         Map<String,Object> payload = Map.of(
-                "code", code,
-                "estimatedWait", entryService.calculateEstimatedWaitMinutes()
+                "code", entry.getCode(),
+                "estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(entry.getAccount().getId()))
         );
         sendEvent("deleted-entry", payload);
     }
 
     private void emitUpdatedEntry(Entry entry) {
+        EntryDTO dto = entryService.toDto(entry);
         Map<String,Object> payload = Map.of(
-                "entry", entry,
-                "estimatedWait", entryService.calculateEstimatedWaitMinutes()
+                "entry", dto,
+                "estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(entry.getAccount().getId()))
         );
         sendEvent("updated-entry", payload);
     }
@@ -85,12 +88,6 @@ public class EntryController {
         sendEvent("waitlist-disabled", "") ;
     }
 
-    @GetMapping
-    public ResponseEntity<List<Entry>> listEntries() {
-        List<Entry> list = entryService.getAll();
-        return ResponseEntity.ok(list);
-    }
-
     /**
      * Server-sent event stream that pushes updates when entries change.
      */
@@ -104,16 +101,16 @@ public class EntryController {
         return emitter;
     }
 
-    @PostMapping
-    public ResponseEntity<Entry> createEntry(@RequestBody Entry entry) {
-        Entry saved = entryService.create(entry);
+    @PostMapping("/create/{code}")
+    public ResponseEntity<EntryDTO> createEntry(@PathVariable String code, @RequestBody Entry entry) {
+        Entry saved = entryService.create(code, entry);
         // push update so clients can append the new entry without polling
         emitNewEntry(saved);
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(entryService.toDto(saved));
     }
 
-    @PostMapping("/{idOrCode}/notify")
-    public ResponseEntity<Void> notifyEntry(@PathVariable String idOrCode, @RequestBody Map<String,String> req) {
+    @PostMapping("/{code}/notify")
+    public ResponseEntity<Void> notifyEntry(@PathVariable String code, @RequestBody Map<String,String> req) {
 
         // Here we lay the ground work but this could serve to notify of other events as well (e.g. reservation confirmed, table ready, etc.) 
         // by including a "type" field in the request and switching on that to determine the message template and whether to send an SMS or just a
@@ -125,10 +122,10 @@ public class EntryController {
             req.containsKey("message") && req.get("message").equals("tableReady")
         ) {
             // send a generic notification (e.g. for front end to show a popup) without sending an SMS
-            entryService.notifyOfTableSms(null, idOrCode, MessageTemplate.TABLE_READY);
+            entryService.notifyOfTableSms(null, code, MessageTemplate.TABLE_READY);
         }
         // notify listening clients that this entry has been called
-        emitNotifiedEntry(idOrCode);
+        emitNotifiedEntry(code);
         return ResponseEntity.ok().build();
     }
 
@@ -136,28 +133,28 @@ public class EntryController {
      * Send a text message to the entry's phone number using Twilio.
      * Request body should be a JSON object with a "message" field.
      */
-    @PostMapping("/{idOrCode}/sms")
-    public ResponseEntity<Void> sendSmsToEntry(@PathVariable String idOrCode, @RequestBody Map<String,String> req) {
+    @PostMapping("/{code}/sms")
+    public ResponseEntity<Void> sendSmsToEntry(@PathVariable String code, @RequestBody Map<String,String> req) {
         String message = req.getOrDefault("message", "");
-        entryService.sendSmsToEntry(idOrCode, message);
+        entryService.sendSmsToEntry(code, message);
         // notify listening clients that this entry has been contacted via SMS
-        emitNotifiedEntry(idOrCode);
+        emitNotifiedEntry(code);
         return ResponseEntity.ok().build();
     }
 
-    @DeleteMapping("/{idOrCode}")
-    public ResponseEntity<Void> deleteEntry(@PathVariable String idOrCode) {
-        Entry e = entryService.deleteEntry(idOrCode);
-        emitDeletedEntry(e.getCode());
+    @DeleteMapping("/{code}")
+    public ResponseEntity<Void> deleteEntry(@PathVariable String code) {
+        Entry e = entryService.deleteEntry(code);
+        emitDeletedEntry(e);
         return ResponseEntity.ok().build();
     }
 
-    @PatchMapping("/{idOrCode}/called")
-    public ResponseEntity<Entry> setCalled(@PathVariable String idOrCode, @RequestBody Map<String,Boolean> req) {
+    @PatchMapping("/{code}/called")
+    public ResponseEntity<EntryDTO> setCalled(@PathVariable String code, @RequestBody Map<String,Boolean> req) {
         boolean called = req.getOrDefault("called", false);
-        Entry updated = entryService.markCalled(idOrCode, called);
+        Entry updated = entryService.markCalled(code, called);
         emitUpdatedEntry(updated);
-        return ResponseEntity.ok(updated);
+        return ResponseEntity.ok(entryService.toDto(updated));
     }
 
     @ExceptionHandler(IOException.class)

@@ -6,6 +6,7 @@ import com.waitlist.dto.LoginRequest;
 import com.waitlist.dto.RegisterRequest;
 import com.waitlist.exception.UnauthorizedException;
 import com.waitlist.model.Account;
+import com.waitlist.model.CodeGenerator;
 import com.waitlist.model.User;
 import com.waitlist.repository.AccountRepository;
 import com.waitlist.repository.UserRepository;
@@ -74,6 +75,7 @@ public class AuthService {
         // No registration code - create a new account for this user and make them an admin
         String zodiacAnimal = CHINESE_ZODIAC[random.nextInt(CHINESE_ZODIAC.length)];
         Account account = new Account(zodiacAnimal, "green");
+        account.ensureCode();
         account = accountRepository.save(account);
         user.setRole(User.UserRole.ADMIN);
     

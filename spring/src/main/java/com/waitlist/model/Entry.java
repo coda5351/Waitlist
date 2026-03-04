@@ -6,6 +6,8 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+import com.waitlist.model.CodeGenerator;
+
 @Entity
 @Getter
 @Setter
@@ -18,6 +20,11 @@ public class Entry {
     // publicly visible random code used instead of numeric id
     @Column(unique = true, nullable = false, length = 6)
     private String code;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer","handler"})
+    private Account account;
 
     private String name;
     private String phone;
@@ -62,14 +69,7 @@ public class Entry {
         }
     }
 
-    private static final String CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    private static final java.security.SecureRandom CODE_RANDOM = new java.security.SecureRandom();
     private static String generateCode() {
-        StringBuilder sb = new StringBuilder(6);
-        for (int i = 0; i < 6; i++) {
-            int idx = CODE_RANDOM.nextInt(CODE_CHARS.length());
-            sb.append(CODE_CHARS.charAt(idx));
-        }
-        return sb.toString();
+        return CodeGenerator.generateCode();
     }
 }

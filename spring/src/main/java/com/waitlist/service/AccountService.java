@@ -6,12 +6,14 @@ import com.waitlist.repository.AccountRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.security.KeyStore.Entry;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.waitlist.dto.ServiceHoursDTO;
 import com.waitlist.model.ServiceHours;
@@ -245,8 +247,26 @@ public class AccountService {
 
     /**
      * Retrieve the current estimated wait time in minutes (delegates to EntryService).
+     * @param accountId 
      */
-    public int getEstimatedWaitMinutes() {
-        return entryService.calculateEstimatedWaitMinutes();
+    public int getEstimatedWaitMinutes(Long accountId) {
+        return entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(accountId));
+    }
+
+    public Account updateCode(Long id, String code) {
+        Account account = getAccountById(id);
+
+        if (account.getCode().equals(code)) {
+            throw new IllegalArgumentException("Wrong code provided, try again.");
+        }
+
+        account.setCode(null);
+        account.ensureCode();
+        return accountRepository.save(account);
+    }
+
+    public Account getAccountByCode(String code) {
+        return accountRepository.findByCode(code)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found with code: " + code));
     }
 }
