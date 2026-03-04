@@ -14,9 +14,7 @@ const routes = [
     component: Home
   },
   {
-    // allow an optional code segment after /waitlist so users can share URLs like
-    // /waitlist/a1B2c3. We still support the query param for backwards compatibility.
-    path: '/waitlist/:entry?',
+    path: '/waitlist/:action/:code?',
     name: 'Waitlist',
     component: Waitlist
   },

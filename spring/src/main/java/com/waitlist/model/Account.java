@@ -6,16 +6,22 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.PrePersist;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "accounts")
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer","handler"})
 public class Account {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    // publicly visible random code used instead of numeric id
+    @Column(unique = true, nullable = false, length = 6)
+    private String code;
 
     @Column(name = "account_name", nullable = false)
     private String accountName;
@@ -73,10 +79,11 @@ public class Account {
     private java.util.Map<String,String> messages = new java.util.HashMap<>();
 
     public Account() {
-        // default constructor leaves boolean defaults (waitlistEnabled=false, smsEnabled=true)
+        ensureCode();
     }
 
     public Account(String accountName, String brandingColorCode) {
+        this();
         this.accountName = accountName;
         this.brandingColorCode = brandingColorCode;
     }
@@ -85,6 +92,14 @@ public class Account {
 
     public Long getId() {
         return id;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
     }
 
     public void setId(Long id) {
@@ -201,5 +216,17 @@ public class Account {
 
     public void setMessages(java.util.Map<String, String> messages) {
         this.messages = messages;
+    }
+
+    // generate/ensure code when persisted or constructed
+    @PrePersist
+    public void ensureCode() {
+        if (this.code == null || this.code.isBlank()) {
+            this.code = generateCode();
+        }
+    }
+
+    private static String generateCode() {
+        return CodeGenerator.generateCode();
     }
 }

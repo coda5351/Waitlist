@@ -40,7 +40,7 @@ public class SecurityConfig {
                 .requestMatchers("GET", "/api/entries", "/api/entries/**").permitAll()
                 .requestMatchers("POST", "/api/entries", "/api/entries/**").permitAll()
                 // public access to waitlist-status
-                .requestMatchers("/api/waitlists/status").permitAll()
+                .requestMatchers("/api/waitlists/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
             )
