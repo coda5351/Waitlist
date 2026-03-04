@@ -1,7 +1,10 @@
 package com.waitlist.controller;
 
 import com.waitlist.model.Account;
+import com.waitlist.model.Entry;
 import com.waitlist.service.AccountService;
+import com.waitlist.service.EntryService;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,19 +21,36 @@ public class WaitlistController {
     @Autowired
     private AccountService accountService;
 
-    @GetMapping("/status")
-    public ResponseEntity<Map<String, Object>> getWaitlistStatus() {
-        boolean open = accountService.isWaitlistOpen(1L);
-        Account account = accountService.getAccountById(1L);
-        int estimate = accountService.getEstimatedWaitMinutes();
+    @Autowired
+    private EntryService entryService;
+    
+    @GetMapping("{code}/status")
+    public ResponseEntity<Map<String, Object>> getWaitlistStatus(@PathVariable String code) {
+        Account account = accountService.getAccountByCode(code);
+        boolean open = accountService.isWaitlistOpen(account.getId());
+        int estimate = accountService.getEstimatedWaitMinutes(account.getId());
         Map<String, Object> body = Map.of(
                 "open", open,
                 "enabled", account.isWaitlistEnabled(),
                 "openTime", account.getWaitlistOpenTime(),
                 "closeTime", account.getWaitlistCloseTime(),
                 "serviceHours", account.getServiceHours(),
-                "estimatedWait", estimate
+                "estimatedWait", estimate,
+                "entries", entryService.getAllActiveEntryDtosForAccount(account.getId())
         );
         return ResponseEntity.ok(body);
     }
+
+    @GetMapping("entry/{code}/status")
+    public ResponseEntity<Map<String, Object>> getEntryWaitlistStatus(@PathVariable String code) {
+        Entry entry = entryService.resolve(code);
+        boolean open = accountService.isWaitlistOpen(entry.getAccount().getId());
+        int estimate = accountService.getEstimatedWaitMinutes(entry.getAccount().getId());
+        Map<String, Object> body = Map.of(
+                "open", open,
+                "estimatedWait", estimate,
+                "entries", entryService.getAllActiveEntryDtosForAccount(entry.getAccount().getId())
+        );
+        return ResponseEntity.ok(body);
+    }   
 }

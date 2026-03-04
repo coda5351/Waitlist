@@ -26,6 +26,13 @@ public class AccountController {
         return ResponseEntity.ok(account);
     }
 
+    @PatchMapping("/{id}/code")
+    public ResponseEntity<Account> updateCode(@PathVariable Long id, @RequestBody Map<String, String> request) {
+        String code = request.get("code");
+        Account account = accountService.updateCode(id, code);
+        return ResponseEntity.ok(account);
+    }
+
     @PatchMapping("/{id}/branding-color")
     public ResponseEntity<Account> updateBrandingColor(@PathVariable Long id, @RequestBody Map<String, String> request) {
         String brandingColorCode = request.get("brandingColorCode");
