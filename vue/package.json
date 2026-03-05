@@ -6,24 +6,24 @@
   "scripts": {
     "dev": "vite --port 5173",
     "build": "vite build",
-
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run"
   },
   "dependencies": {
+    "qrcode": "^1.5.0",
     "vue": "^3.3.4",
     "vue-router": "^4.6.4",
     "vue-toastification": "^2.0.0-rc.5",
-    "vuex": "^4.0.2",
-    "qrcode": "^1.5.0"
+    "vuex": "^4.0.2"
   },
   "devDependencies": {
+    "@types/node": "^25.3.3",
     "@vitejs/plugin-vue": "^4.3.4",
+    "cypress": "^14.3.0",
     "typescript": "^5.1.6",
     "vite": "^4.4.9",
-    "vue-tsc": "^1.8.8",
-    "cypress": "^14.3.0"
+    "vue-tsc": "^1.8.8"
   }
 }
