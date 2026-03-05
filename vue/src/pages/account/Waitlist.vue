@@ -3,9 +3,9 @@
     <h3>Waitlist Settings</h3>
     <p>Configure the account's waitlist opening and closing schedule.</p>
 
-    <p v-if="status">
+    <p v-if="waitlistActive">
       <strong>Status:</strong> {{ status.enabled ? (status.open ? 'Open' : 'Closed') : 'Disabled' }}<br />
-      <RouterLink v-if="status.enabled" :to="`/waitlist/join/${user.account.code}`" class="link-inline" target="_blank">View public waitlist page</RouterLink>
+      <RouterLink :to="`/waitlist/join/${user.account.code}`" class="link-inline" target="_blank">View public waitlist page</RouterLink>
       <div v-if="qrCodeUrl" class="qr-container">
         <img :src="qrCodeUrl" alt="QR code for public waitlist" />
       </div>
