@@ -47,6 +47,9 @@ public class AuthService {
     @Autowired
     private EmailService emailService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
     // simple in-memory store of reset tokens ; in production this would be persisted and expire
     private final Map<String,String> resetTokens = new ConcurrentHashMap<>();
 
@@ -137,7 +140,7 @@ public class AuthService {
         String token = Integer.toHexString(random.nextInt());
         // store token so we can validate it later (demo only)
         resetTokens.put(user.getEmail(), token);
-        String resetLink = "http://localhost:5173/reset-password?token=" + token + "&email=" + user.getEmail();
+        String resetLink = frontendUrl + "/reset-password?token=" + token + "&email=" + user.getEmail();
 
         // 2. send via email (smtp4dev will capture it when running dev profile)
         String subject = "[Waitlist] Password reset request";
