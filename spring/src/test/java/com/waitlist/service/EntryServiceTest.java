@@ -35,6 +35,16 @@ public class EntryServiceTest {
     @InjectMocks
     private EntryService entryService;
 
+    @org.junit.jupiter.api.BeforeEach
+    public void initFrontendUrl() {
+        try {
+            java.lang.reflect.Field f = EntryService.class.getDeclaredField("frontendUrl");
+            f.setAccessible(true);
+            f.set(entryService, "http://localhost:5173");
+        } catch (Exception ignored) {
+        }
+    }
+
     @Test
     public void getAll_shouldReturnOrdered() {
         Entry a = new Entry("A","111",1);
@@ -71,7 +81,7 @@ public class EntryServiceTest {
         // set phone number so sms notification will be sent
         in.setPhone("1234567890");
 
-        Entry out = entryService.create(in);
+        Entry out = entryService.create("acct", in);
         // service should return object with generated id and code
         assertNotNull(out.getId());
         assertNotNull(out.getCode());
@@ -88,7 +98,7 @@ public class EntryServiceTest {
         when(environment.getActiveProfiles()).thenReturn(new String[0]);
 
         assertThrows(com.waitlist.exception.WaitlistDisabledException.class,
-                () -> entryService.create(in));
+                () -> entryService.create("acct", in));
         // ensure repository never called
         verifyNoInteractions(entryRepository);
     }
@@ -112,7 +122,7 @@ public class EntryServiceTest {
                 .thenReturn("Hi %s, welcome!");
         in.setPhone("555");
 
-        Entry out = entryService.create(in);
+        Entry out = entryService.create("acct", in);
         verify(smsService).sendSms(eq(1L), eq("555"), eq("Hi Custom, welcome!"));
     }
     @Test

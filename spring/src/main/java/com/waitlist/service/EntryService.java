@@ -35,6 +35,10 @@ public class EntryService {
     @org.springframework.beans.factory.annotation.Value("${twilio.use-dev-number:false}")
     private boolean useDevNumber;
 
+    // base URL for the frontend application, used in SMS templates
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
     /**
      * Estimate total wait time (minutes) based on current queue.
      * 5 minutes allocated for each party under 4 people, 10 minutes otherwise.
@@ -112,7 +116,7 @@ public class EntryService {
                     case "newEntry":
                         String newEntryMsgString = String.format(template,
                         entry.getName(),
-                        "http://localhost:5173/waitlist",
+                        frontendUrl + "/waitlist/view",
                         entry.getCode(),
                         entry.getName(),
                         entry.getPhone(),

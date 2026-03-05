@@ -80,9 +80,9 @@ public class EntryControllerTest {
             f.setAccessible(true);
             f.set(a, 2L);
         } catch (Exception ignored) {}
-        when(entryService.create(any())).thenReturn(a);
+        when(entryService.create(anyString(), any())).thenReturn(a);
 
-        mockMvc.perform(post("/api/entries")
+        mockMvc.perform(post("/api/entries/create/abc")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(a)))
                 .andExpect(status().isOk())
@@ -90,9 +90,9 @@ public class EntryControllerTest {
                 .andExpect(jsonPath("$.code").isNotEmpty());
 
         // simulate disabled waitlist scenario
-        when(entryService.create(any())).thenThrow(new com.waitlist.exception.WaitlistDisabledException());
+        when(entryService.create(anyString(), any())).thenThrow(new com.waitlist.exception.WaitlistDisabledException());
         Entry d = new Entry("D","444",4);
-        mockMvc.perform(post("/api/entries")
+        mockMvc.perform(post("/api/entries/create/abc")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(d)))
                 .andExpect(status().isBadRequest())
@@ -149,10 +149,10 @@ public class EntryControllerTest {
             f.setAccessible(true);
             f.set(a, 2L);
         } catch (Exception ignored) {}
-        when(entryService.create(any())).thenReturn(a);
+        when(entryService.create(anyString(), any())).thenReturn(a);
         when(entryService.calculateEstimatedWaitMinutes()).thenReturn(99);
 
-        mockMvc.perform(post("/api/entries")
+        mockMvc.perform(post("/api/entries/create/abc")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(a)))
                 .andExpect(status().isOk());
