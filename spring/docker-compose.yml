@@ -5,6 +5,7 @@ services:
       dockerfile: spring/Dockerfile
     container_name: waitlist-app
     environment:
+      TZ: "America/New_York"
       SPRING_PROFILES_ACTIVE: prod
       SPRING_MAIL_HOST: smtp4dev    # so container can reach the mail service by name
       DATABASE_URL: jdbc:postgresql://postgres:5432/waitlist
@@ -45,6 +46,8 @@ services:
       POSTGRES_DB: waitlist
       POSTGRES_USER: dragon
       POSTGRES_PASSWORD: ieatsheep
+    ports:
+      - "5432:5432"   # expose postgres to host
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
