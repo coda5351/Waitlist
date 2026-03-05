@@ -56,6 +56,14 @@ public class AuthServiceTest {
             String encoded = invocation.getArgument(1);
             return encoded.equals("ENC:" + raw);
         });
+
+        // also ensure frontendUrl is set so we don't hit NPE when building reset links
+        try {
+            Field f = AuthService.class.getDeclaredField("frontendUrl");
+            f.setAccessible(true);
+            f.set(authService, "http://localhost:5173");
+        } catch (Exception ignored) {
+        }
     }
 
     @Test
