@@ -80,8 +80,11 @@ public class EntryService {
         entry.setId(null);
         entry.setAccount(accountService.getAccountByCode(code));
         Entry saved = entryRepository.save(entry);
-        notifyOfTableSms(entry, code, MessageTemplate.NEW_ENTRY);
+        if (entry.getAccount().isSmsEnabled() && entry.getAccount().getTwilioAccountSid() != null && entry.getAccount().getTwilioAuthToken() != null) {
+            notifyOfTableSms(entry, code, MessageTemplate.NEW_ENTRY);
+        } 
         return saved;
+        
     }
 
     public void notifyOfTableSms(Entry entry, String entryCode, MessageTemplate templateType) {
@@ -96,7 +99,7 @@ public class EntryService {
         if (!accountService.isWaitlistOpen(accountId)) {
             throw new com.waitlist.exception.WaitlistDisabledException();
         }
-        
+
         try {
             if (entry.getPhone() != null && !entry.getPhone().isBlank()) {
                 String to = entry.getPhone();
@@ -104,6 +107,9 @@ public class EntryService {
                     to = devTarget;
                 }
                 String template = accountService.getMessageTemplate(accountId, templateType.getKey());
+                if (template == null) {
+                    template = templateType.getDefaultTemplate();
+                }
                 switch (templateType.getKey()) {
                     case "tableReady":
                         String tableReadyMsgString = String.format(template,
