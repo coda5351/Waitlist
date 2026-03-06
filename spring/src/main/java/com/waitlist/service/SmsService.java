@@ -20,6 +20,13 @@ public class SmsService {
     @Value("${twilio.from-number:}")
     private String fromNumber;
 
+    // Messaging service SID used for send-test-message calls.  Read from
+    // configuration so it can be replaced in environments where the magic
+    // default is not valid.  Kept separate from the normal "from" number
+    // because Twilio requires the SID for messaging service usage.
+    @Value("${twilio.test-message-sid:}")
+    private String twilioTestMessageSid;    
+
     public SmsService(@Lazy AccountService accountService) {
         this.accountService = accountService;
     }
@@ -56,8 +63,12 @@ public class SmsService {
         }
         Twilio.init(accountSid, authToken);
         // determine 'from' number: use configured value if present (ensures valid account
-        // phone is used), otherwise fall back to the magic testing number.
-        Message.creator(new PhoneNumber("+15005550106"), new PhoneNumber("+15005550006"), "This is a test message.").create();
+        // phone is used), otherwise fall back to the magic testing number used prior to
+        // introducing the configuration property.
+        if (fromNumber != null && !fromNumber.isBlank()) {
+            throw new IllegalStateException("from number must be configured to use testCredentials");
+        }
+        Message.creator(new PhoneNumber(fromNumber), twilioTestMessageSid, "This is a test message.").create();
     }
 
     /**
@@ -66,5 +77,10 @@ public class SmsService {
      */
     public void sendSms(String to, String body) {
         sendSms(1L, to, body);
+    }
+
+    // setter used by tests to override the injected property value
+    public void setTwilioTestMessageSid(String twilioTestMessageSid) {
+        this.twilioTestMessageSid = twilioTestMessageSid;
     }
 }
