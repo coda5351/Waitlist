@@ -160,13 +160,11 @@ public class AccountService {
         }
         // if credentials are being updated, validate them *before* persisting
         if (updated) {
-            String sidToTest = newSid != null ? newSid : account.getTwilioAccountSid();
-            String tokenToTest = newToken != null ? newToken : account.getRawTwilioAuthToken();
             try {
-                smsService.testCredentials(sidToTest, tokenToTest);
+                smsService.testCredentials(newSid, newToken);
             } catch (Exception ex) {
                 // wrap and propagate custom message so caller can surface it
-                throw new IllegalArgumentException("Twilio credentials were not saved. Check the credentials and try again.", ex);
+                throw new IllegalArgumentException("Twilio credentials were not saved. Check the credentials and try again. " + ex.getMessage(), ex);
             }
         }
         if (newSid != null) {
