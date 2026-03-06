@@ -41,9 +41,10 @@ public class Account {
 
     // toggle whether Twilio SMS messages should actually be sent.  When false
     // we simply log attempts, which makes development/testing easier and
-    // allows administrators to temporarily disable notifications.
+    // allows administrators to temporarily disable notifications.  Default is
+    // now false; a later flyway migration adjusts the database default.
     @Column(name = "sms_enabled", nullable = false)
-    private boolean smsEnabled = true;
+    private boolean smsEnabled = false;
 
     @Column(name = "waitlist_open_time")
     private LocalDateTime waitlistOpenTime;
