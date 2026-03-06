@@ -40,9 +40,10 @@ public class SmsService {
         String authToken = acct.getRawTwilioAuthToken();
         if (accountSid == null || accountSid.isBlank() || authToken == null || authToken.isBlank()) {
             throw new IllegalStateException("Twilio credentials are not configured for account " + accountId);
+        } else {
+            Twilio.init(accountSid, authToken);
+            Message.creator(new PhoneNumber(to), new PhoneNumber(fromNumber), body).create();
         }
-        Twilio.init(accountSid, authToken);
-        Message.creator(new PhoneNumber(to), new PhoneNumber(fromNumber), body).create();
     }
 
     /**
