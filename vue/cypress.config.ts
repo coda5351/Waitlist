@@ -8,7 +8,8 @@ export default defineConfig({
     //
     // Cypress will check the `baseUrl` and wait for it to become available.
     // default port used by development server; change via PORT env if needed
-    baseUrl: `http://localhost:${process.env.PORT || 5174}`,
+    // Vite dev server runs on 5173 by default
+    baseUrl: `http://localhost:${process.env.PORT || 5173}`,
     specPattern: 'cypress/e2e/**/*.cy.{js,ts}',
     supportFile: 'cypress/support/e2e.ts',
     video: false
