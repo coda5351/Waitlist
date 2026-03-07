@@ -17,6 +17,9 @@
     <main class="container">
       <router-view />
     </main>
+
+    <!-- inline login modal shown when token expires -->
+    <LoginModal />
   </div>
 </template>
 
@@ -24,6 +27,7 @@
 import { useTheme } from '@/composables/useTheme'
 import { onMounted, computed, ref } from 'vue'
 import { useStore } from 'vuex'
+import LoginModal from '@/components/LoginModal.vue'
 
 const { initTheme } = useTheme()
 const store = useStore()
