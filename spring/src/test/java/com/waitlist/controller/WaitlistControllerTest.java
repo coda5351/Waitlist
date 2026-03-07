@@ -3,6 +3,7 @@ package com.waitlist.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.waitlist.model.Account;
 import com.waitlist.service.AccountService;
+import com.waitlist.service.EntryService;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,9 @@ public class WaitlistControllerTest {
     @MockBean
     private AccountService accountService;
 
+    @MockBean
+    private EntryService entryService;
+
     // other security beans pulled in by configuration
     @MockBean
     private com.waitlist.security.JwtTokenProvider jwtTokenProvider;
@@ -53,10 +57,11 @@ public class WaitlistControllerTest {
         bh.put(java.time.DayOfWeek.MONDAY, monday);
         acct.setServiceHours(bh);
         acct.setSmsEnabled(true);
-        when(accountService.getAccountById(7L)).thenReturn(acct);
-        when(accountService.getEstimatedWaitMinutes()).thenReturn(25);
+        when(accountService.getAccountByCode(eq("7"))).thenReturn(acct);
+        when(accountService.getEstimatedWaitMinutes(eq(7L))).thenReturn(25);
+        when(entryService.getAllActiveEntryDtosForAccount(eq(7L))).thenReturn(java.util.Collections.emptyList());
 
-        mockMvc.perform(get("/api/accounts/7/waitlist-status"))
+        mockMvc.perform(get("/api/waitlists/7/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.open").value(true))
                 .andExpect(jsonPath("$.enabled").value(true))
