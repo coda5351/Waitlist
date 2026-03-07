@@ -3,9 +3,7 @@
     <div class="login-wrapper">
       <div class="login-card">
         <h1>Login</h1>
-        <div v-if="sessionTimeoutMessage" class="info-message">
-          {{ sessionTimeoutMessage }}
-        </div>
+        <!-- the timeout message is now shown as a toast, not inline -->
         <form @submit.prevent="handleSubmit">
         <div class="form-group">
           <label for="username">Username or Email</label>
@@ -153,10 +151,13 @@ const forgotPasswordError = ref('')
 const forgotPasswordSuccess = ref('')
 const sessionTimeoutMessage = ref('')
 
-// Check for session timeout
+// Check for session timeout and show informational toast
 if (sessionStorage.getItem('sessionTimeout') === 'true') {
   sessionTimeoutMessage.value = 'Your session timed out, log in again to continue'
   sessionStorage.removeItem('sessionTimeout')
+  import('@/utils/notify').then(({ info }) => {
+    info(sessionTimeoutMessage.value)
+  })
 }
 
 const openForgotPasswordModal = () => {
@@ -224,9 +225,11 @@ const handleSubmit = async () => {
     // Show welcome toast
     notifySuccess(`Welcome back, ${data.user.fullName}!`)
 
-    // we continue to honor a session-timeout redirect, but otherwise always
-    // land on the account profile page. this keeps things simple and meets the
-    // new requirement.
+    // after a successful login we redirect to whatever path was stored in
+    // `redirectAfterLogin` (the modal sets this when an API call returned 403).
+    // if no path was saved we fall back to the profile page as before.
+    // the new inline-modal flow means users who hit an expired token stay on
+    // the same page instead of being sent to /login first.
     const redirectPath = sessionStorage.getItem('redirectAfterLogin')
     if (redirectPath) {
       sessionStorage.removeItem('redirectAfterLogin')

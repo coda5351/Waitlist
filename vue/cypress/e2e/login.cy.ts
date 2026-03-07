@@ -43,4 +43,33 @@ describe('Login page', () => {
     cy.wait('@loginRequest')
     cy.url().should('include', '/account/profile')
   })
+
+  it('displays inline login modal when a protected call returns 403', () => {
+    // ensure the app has a token so apiFetch will include it
+    localStorage.setItem('jwt_token', 'foo')
+    cy.intercept('GET', '**/protected', { statusCode: 403 }).as('protected')
+
+    cy.visit('/')
+    cy.window().then((win) => {
+      // trigger a call through the global fetch wrapper
+      return win.fetch('/api/protected').catch(() => {})
+    })
+
+    // the modal overlay should appear with our expiration message
+    cy.get('div.modal-overlay').should('be.visible')
+    cy.get('input#modal-username').should('exist')
+    // toast notification should also be shown as info
+    cy.get('.Vue-Toastification__toast--info').should('contain', 'Your session has expired')
+
+    // stub the login endpoint so the modal can complete
+    cy.intercept('POST', '**/auth/login', { body: { token: 'new', user: { id: 1, fullName: 'Test User', account: { id: 1 } } } }).as('modalLogin')
+
+    cy.get('input#modal-username').type('user1')
+    cy.get('input#modal-password').type('password1')
+    cy.get('div.modal-content button[type=submit]').click()
+    cy.wait('@modalLogin')
+
+    // after login the modal should disappear
+    cy.get('div.modal-overlay').should('not.exist')
+  })
 })

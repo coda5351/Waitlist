@@ -59,17 +59,19 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
     
     clearTimeout(timeoutId)
     
-    // Handle 403 Forbidden - Session timeout
+    // Handle 403 Forbidden - Session timeout (expired/invalid token)
     if (response.status === 403) {
-      // Store the current path for redirect after login
       const currentPath = window.location.pathname
       if (currentPath !== '/login') {
+        // remember where the user was so we can navigate later if needed
         sessionStorage.setItem('redirectAfterLogin', currentPath)
-        sessionStorage.setItem('sessionTimeout', 'true')
-        
-        // Redirect to login
-        window.location.href = '/login'
       }
+
+      // instead of leaving the current page we'll show a login modal so the
+      // user can refresh the token in-place
+      const toastModule = await import('@/utils/notify')
+      toastModule.info('Your session has expired. Please log in again to continue.')
+      store.dispatch('showLoginModal', 'Your session has expired. Please log in again to continue.')
     }
     
     return response
