@@ -30,6 +30,8 @@ export interface Account {
 }
 
 export interface State {
+  loginModalMessage: any
+  loginModalVisible: any
   token: string | null
   user: User | null
   isAuthenticated: boolean
@@ -39,7 +41,10 @@ const store = createStore<State>({
   state: {
     token: localStorage.getItem('jwt_token') || null,
     user: JSON.parse(localStorage.getItem('user') || 'null'),
-    isAuthenticated: !!localStorage.getItem('jwt_token')
+    isAuthenticated: !!localStorage.getItem('jwt_token'),
+    // controls for the inline login modal shown when a JWT expires
+    loginModalVisible: false,
+    loginModalMessage: ''
   },
   mutations: {
     SET_TOKEN(state, token: string) {
@@ -75,10 +80,20 @@ const store = createStore<State>({
       // Apply default green theme
       const { setThemeColor } = useTheme()
       setThemeColor('green')
+    },
+    SHOW_LOGIN_MODAL(state, message: string) {
+      state.loginModalVisible = true
+      state.loginModalMessage = message
+    },
+    HIDE_LOGIN_MODAL(state) {
+      state.loginModalVisible = false
+      state.loginModalMessage = ''
     }
   },
   actions: {
     login({ commit }, { token, user }: { token: string; user?: User }) {
+      // logging in should hide any modal that may be open
+      commit('HIDE_LOGIN_MODAL')
       commit('SET_TOKEN', token)
       if (user) {
         commit('SET_USER', user)
@@ -86,12 +101,20 @@ const store = createStore<State>({
     },
     logout({ commit }) {
       commit('LOGOUT')
+    },
+    showLoginModal({ commit }, message: string) {
+      commit('SHOW_LOGIN_MODAL', message)
+    },
+    hideLoginModal({ commit }) {
+      commit('HIDE_LOGIN_MODAL')
     }
   },
   getters: {
     isAuthenticated: (state) => state.isAuthenticated,
     token: (state) => state.token,
-    user: (state) => state.user
+    user: (state) => state.user,
+    loginModalVisible: (state) => state.loginModalVisible,
+    loginModalMessage: (state) => state.loginModalMessage
   }
 })
 
