@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
  */
 public enum EntrySource {
     WEB("web",false, "web"),
-    ANDROID_FLUTTER("android:flutter",true, "android");
+    ANDROID_FLUTTER("android_flutter",true, "flutter"),;
 
     private final String name;
     private final boolean mobile;
@@ -43,7 +43,7 @@ public enum EntrySource {
             return null;
         }
         for (EntrySource s : values()) {
-            if (s.name().equalsIgnoreCase(value.trim())) {
+            if (s.name().equalsIgnoreCase(value.trim().toLowerCase())) {
                 return s;
             }
         }
