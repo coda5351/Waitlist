@@ -6,8 +6,6 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-import com.waitlist.model.CodeGenerator;
-
 @Entity
 @Getter
 @Setter

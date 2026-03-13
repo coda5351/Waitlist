@@ -26,6 +26,36 @@ public class EntryController {
 
     private static final Logger logger = LoggerFactory.getLogger(EntryController.class);
 
+    private enum EventName {
+        NEW_ENTRY("new-entry"),
+        DELETED_ENTRY("deleted-entry"),
+        UPDATED_ENTRY("updated-entry"),
+        NOTIFIED_ENTRY("notified-entry"),
+        WAITLIST_DISABLED("waitlist-disabled");
+
+        private final String value;
+
+        EventName(String value) {
+            this.value = value;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        /**
+         * Determine whether the provided value matches a known event name.
+         */
+        public static boolean isValid(String value) {
+            for (EventName e : values()) {
+                if (e.value.equals(value)) {
+                    return true;
+                }
+            }
+            throw new IllegalArgumentException("Unsupported event name: " + value);
+        }
+    }
+
     @Autowired
     private EntryService entryService;
 
@@ -34,17 +64,23 @@ public class EntryController {
     // package-visible so tests can register mock emitters
     final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
 
-    private void sendEvent(String eventName, Object data) {
+    private void sendEvent(EventName eventName, Object data) {
+        // validate event name even though the type is an enum; this is defensive in case
+        // someone uses the string-based overload in tests or future extensions.
+        if (eventName == null || !EventName.isValid(eventName.getValue())) {
+            throw new IllegalArgumentException("Event name must valid and not null");
+        }
+
         List<SseEmitter> dead = new ArrayList<>();
         for (SseEmitter emitter : emitters) {
             try {
                 SseEmitter.SseEventBuilder builder = SseEmitter.event()
-                        .name(eventName)
+                        .name(eventName.getValue())
                         .data(data, MediaType.APPLICATION_JSON);
                 emitter.send(builder);
             } catch (IOException e) {
                 // client likely closed connection; log at warn level without stack trace
-                logger.warn("Failed to send SSE event '{}' to client: {}", eventName, e.getMessage());
+                logger.warn("Failed to send SSE event '{}' to client: {}", eventName.getValue(), e.getMessage());
                 dead.add(emitter);
             }
         }
@@ -57,7 +93,7 @@ public class EntryController {
                 "entry", dto,
                 "estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(entry.getAccount().getId()))
         );
-        sendEvent("new-entry", payload);
+        sendEvent(EventName.NEW_ENTRY, payload);
     }
 
     private void emitDeletedEntry(Entry entry) {
@@ -65,7 +101,7 @@ public class EntryController {
                 "code", entry.getCode(),
                 "estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(entry.getAccount().getId()))
         );
-        sendEvent("deleted-entry", payload);
+        sendEvent(EventName.DELETED_ENTRY, payload);
     }
 
     private void emitUpdatedEntry(Entry entry) {
@@ -74,18 +110,18 @@ public class EntryController {
                 "entry", dto,
                 "estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(entry.getAccount().getId()))
         );
-        sendEvent("updated-entry", payload);
+        sendEvent(EventName.UPDATED_ENTRY, payload);
     }
 
     private void emitNotifiedEntry(String code) {
-        sendEvent("notified-entry", code);
+        sendEvent(EventName.NOTIFIED_ENTRY, code);
     }
 
     /**
      * Notify clients that the entire waitlist has been disabled (closed).
      */
     public void emitWaitlistDisabled() {
-        sendEvent("waitlist-disabled", "") ;
+        sendEvent(EventName.WAITLIST_DISABLED, "");
     }
 
     /**
