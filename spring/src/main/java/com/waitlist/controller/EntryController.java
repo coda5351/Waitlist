@@ -87,8 +87,8 @@ public class EntryController {
         emitters.removeAll(dead);
     }
 
-    private void emitToEntry(String code, EventName eventName) {
-        EntryDTO dto = entryService.toDto(entryService.resolve(code));
+    private void emitToEntry(String entryCode, EventName eventName) {
+        EntryDTO dto = entryService.toDto(entryService.resolve(entryCode));
         Map<String,Object> payload = Map.of(
                 "entry", dto,
                 "estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(dto.getAccountId()))
@@ -120,7 +120,7 @@ public class EntryController {
     public ResponseEntity<EntryDTO> createEntry(@PathVariable String code, @RequestBody Entry entry) {
         Entry saved = entryService.create(code, entry);
         // push update so clients can append the new entry without polling
-        emitToEntry(code, EventName.NEW_ENTRY);
+        emitToEntry(saved.getCode(), EventName.NEW_ENTRY);
         return ResponseEntity.ok(entryService.toDto(saved));
     }
 
