@@ -3,23 +3,26 @@ package com.waitlist.service;
 import com.waitlist.exception.ResourceNotFoundException;
 import com.waitlist.model.Account;
 import com.waitlist.repository.AccountRepository;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.security.KeyStore.Entry;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import com.waitlist.dto.ServiceHoursDTO;
 import com.waitlist.model.ServiceHours;
 
 @Service
 public class AccountService {
+
+    Logger logger = LoggerFactory.getLogger(AccountService.class);
 
     @Autowired
     private AccountRepository accountRepository;
@@ -238,6 +241,8 @@ public class AccountService {
             }
         }
         if (!open) {
+            // if the waitlist is not open, ensure all entries are deactivated so the frontend doesn't see stale data
+            logger.info("Waitlist is closed for account {}, deactivating all entries", accountId); 
             entryService.deactivateAllEntries();
         }
         return open;

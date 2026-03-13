@@ -36,6 +36,11 @@ public class Entry {
     @Column(nullable = false)
     private boolean active = true;
 
+    // tracks whether the entry was created from the web UI or the flutter client
+    @Column(nullable = false, length = 20)
+    @jakarta.persistence.Convert(converter = EntrySourceConverter.class)
+    private EntrySource source = EntrySource.WEB;
+
     public Entry() {
         this.timestamp = LocalDateTime.now();
         this.called = false;
@@ -59,11 +64,14 @@ public class Entry {
         this.active = active;
     }
 
-    // generate/ensure code when the object is persisted or constructed
+    // generate/ensure code and source when the object is persisted or constructed
     @PrePersist
     public void ensureCode() {
         if (this.code == null || this.code.isBlank()) {
             this.code = generateCode();
+        }
+        if (this.source == null) {
+            this.source = EntrySource.WEB;
         }
     }
 
