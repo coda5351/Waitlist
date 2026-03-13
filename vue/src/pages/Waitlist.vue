@@ -66,7 +66,7 @@
     </div>
 
     <!-- waitlist table -->
-    <div v-if="showWaitlistTable" class="list">
+    <div v-if="showWaitlistTable && !showMissingEntryMessage" class="list">
       <h3>Current Waitlist</h3>
       <DataTable :columns="columns" :rows="entries">
         <template #row="{ row }">
@@ -112,9 +112,16 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, throwIfNotOk, getApiUrl } from '@/utils/api'
 import DataTable from '@/components/DataTable.vue'
+import { WaitlistEvent, type WaitlistEventName } from '@/types/waitlistEvents'
 
 const entries = ref<any[]>([])
 let source: EventSource | null = null
+
+function addSseListener(event: WaitlistEventName, handler: (e: MessageEvent) => void) {
+  if (!source) return
+  source.addEventListener(event, handler)
+}
+
 const leaveDialogVisible = ref(false)
 const leaveTargetId = ref<string | null>(null)
 const columns = [
@@ -278,7 +285,7 @@ function initEventSource() {
   try {
     const streamUrl = getApiUrl('/entries/stream')
     source = new EventSource(streamUrl)
-    source.addEventListener('new-entry', (e: MessageEvent) => {
+    addSseListener(WaitlistEvent.NEW_ENTRY, (e: MessageEvent) => {
       const payload = JSON.parse(e.data)
       const entry = payload.entry || payload
       if (payload.estimatedWait !== undefined) {
@@ -287,7 +294,7 @@ function initEventSource() {
       }
       entries.value.push({ ...entry, idx: entries.value.length + 1, timestamp: formatTime(entry.timestamp) })
     })
-    source.addEventListener('deleted-entry', (e: MessageEvent) => {
+    addSseListener(WaitlistEvent.DELETED_ENTRY, (e: MessageEvent) => {
       const payload = JSON.parse(e.data)
       const code = payload.code || String(e.data)
       if (payload.estimatedWait !== undefined && status.value) {
@@ -297,7 +304,7 @@ function initEventSource() {
       entries.value = entries.value.map((r,i) => ({ ...r, idx: i+1 }))
       checkEntryPresence()
     })
-    source.addEventListener('updated-entry', (e: MessageEvent) => {
+    addSseListener(WaitlistEvent.UPDATED_ENTRY, (e: MessageEvent) => {
       const payload = JSON.parse(e.data)
       const updated = payload.entry || payload
       if (payload.estimatedWait !== undefined && status.value) {
@@ -306,13 +313,13 @@ function initEventSource() {
       entries.value = entries.value.map(r => r.code === updated.code ? { ...r, ...updated, timestamp: formatTime(updated.timestamp) } : r)
       checkEntryPresence()
     })
-    source.addEventListener('notified-entry', (e: MessageEvent) => {
+    addSseListener(WaitlistEvent.NOTIFIED_ENTRY, (e: MessageEvent) => {
       const id = String(e.data)
       if (currentCode.value === id) {
         tableReady.value = true
       }
     })
-    source.addEventListener('waitlist-disabled', () => {
+    addSseListener(WaitlistEvent.WAITLIST_DISABLED, () => {
       // show notice but avoid duplicate popups
       listDisabledNotice.value = true
       tableReady.value = false
