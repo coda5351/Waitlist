@@ -147,8 +147,15 @@ public class EntryService {
      */
     public Entry deleteEntry(String idOrCode) {
         Entry entry = resolve(idOrCode);
+        // log a prominent message whenever an entry is deactivated/deleted
+        logger.info("========== DELETING ENTRY ==========");
+        logger.info("Entry identified for deletion: id={}, code={}, name={} partySize={} active={}",
+                entry.getId(), entry.getCode(), entry.getName(), entry.getPartySize(), entry.isActive());
         entry.setActive(false);
-        return entryRepository.save(entry);
+        Entry saved = entryRepository.save(entry);
+        logger.info("Entry marked inactive and saved: id={}, code={}", saved.getId(), saved.getCode());
+        logger.info("====================================");
+        return saved;
     }
 
     /**

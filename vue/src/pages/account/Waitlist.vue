@@ -144,6 +144,7 @@ import DataTable from '@/components/DataTable.vue'
 import { formatTime } from '@/utils/dateFormatter'
 import { formatPhoneNumber, phoneLink } from '@/utils/phoneFormatter'
 import { toDataURL } from 'qrcode'
+import { WaitlistEvent, type WaitlistEventName } from '@/types/waitlistEvents'
 
 const store = useStore()
 const user = computed(() => store.getters.user)
@@ -436,6 +437,11 @@ const saveWaitlistSettings = async () => {
 
 let source: EventSource | null = null
 
+function addSseListener(event: WaitlistEventName, handler: (e: MessageEvent) => void) {
+  if (!source) return
+  source.addEventListener(event, handler)
+}
+
 onMounted(async () => {
   populate()
   fetchStatus()
@@ -444,7 +450,7 @@ onMounted(async () => {
     // build full URL via utility to keep base config logic
     const streamUrl = getApiUrl('/entries/stream')
     source = new EventSource(streamUrl)
-    source.addEventListener('new-entry', (e: MessageEvent) => {
+    addSseListener(WaitlistEvent.NEW_ENTRY, (e: MessageEvent) => {
       const payload = JSON.parse(e.data)
       const entry = payload.entry || payload
       if (payload.estimatedWait !== undefined && status.value) {
@@ -454,7 +460,7 @@ onMounted(async () => {
       const idx = status.value.entries.length + 1
       status.value.entries.push({ ...entry, idx, timestamp: formatTime(entry.timestamp) })
     })
-    source.addEventListener('deleted-entry', (e: MessageEvent) => {
+    addSseListener(WaitlistEvent.DELETED_ENTRY, (e: MessageEvent) => {
       const payload = JSON.parse(e.data)
       const code = payload.code || String(e.data)
       if (payload.estimatedWait !== undefined && status.value) {
@@ -464,7 +470,7 @@ onMounted(async () => {
       // re-index rows
       status.value.entries = status.value.entries.map((r: any, i: number) => ({ ...r, idx: i+1 }))
     })
-    source.addEventListener('updated-entry', (e: MessageEvent) => {
+    addSseListener(WaitlistEvent.UPDATED_ENTRY, (e: MessageEvent) => {
       const payload = JSON.parse(e.data)
       const updated = payload.entry || payload
       if (payload.estimatedWait !== undefined && status.value) {
@@ -472,7 +478,7 @@ onMounted(async () => {
       }
       status.value.entries = status.value.entries.map((r: { code: any }) => r.code === updated.code ? { ...r, ...updated, timestamp: formatTime(updated.timestamp) } : r)
     })
-    source.addEventListener('notified-entry', (e: MessageEvent) => {
+    addSseListener(WaitlistEvent.NOTIFIED_ENTRY, (e: MessageEvent) => {
       const code = String(e.data)
       // optionally flag entry locally so UI can show it has been notified
       status.value.entries = status.value.entries.map((r: { code: string }) => r.code === code ? { ...r, notified: true } : r)
