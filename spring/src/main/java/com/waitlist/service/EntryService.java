@@ -240,6 +240,7 @@ public class EntryService {
         dto.setTimestamp(entry.getTimestamp());
         dto.setCalled(entry.isCalled());
         dto.setActive(entry.isActive());
+        dto.setSource(entry.getSource());
         return dto;
     }
 }
