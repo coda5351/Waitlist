@@ -13,6 +13,7 @@ public class EntryDTO {
     private Long accountId;
     private String name;
     private String phone;
+    private com.waitlist.model.EntrySource source;
     private int partySize;
     private LocalDateTime timestamp;
     private boolean called;
@@ -57,6 +58,14 @@ public class EntryDTO {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public com.waitlist.model.EntrySource getSource() {
+        return source;
+    }
+
+    public void setSource(com.waitlist.model.EntrySource source) {
+        this.source = source;
     }
 
     public int getPartySize() {
