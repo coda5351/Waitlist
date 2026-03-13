@@ -84,7 +84,6 @@ public class EntryService {
             notifyOfTableSms(entry, code, MessageTemplate.NEW_ENTRY);
         } 
         return saved;
-        
     }
 
     public void notifyOfTableSms(Entry entry, String entryCode, MessageTemplate templateType) {
