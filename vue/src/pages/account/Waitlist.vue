@@ -462,7 +462,7 @@ onMounted(async () => {
     })
     addSseListener(WaitlistEvent.DELETED_ENTRY, (e: MessageEvent) => {
       const payload = JSON.parse(e.data)
-      const code = payload.code || String(e.data)
+      const code = payload.entry.code || String(e.data)
       if (payload.estimatedWait !== undefined && status.value) {
         status.value.estimatedWait = payload.estimatedWait
       }

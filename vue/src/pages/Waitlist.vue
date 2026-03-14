@@ -22,9 +22,9 @@
               <label>Name:</label>
               <input v-model="form.name" />
             </div>
-              <div class="form-group">
+            <div class="form-group">
               <label>Phone:</label>
-              <input v-model="form.phone" />
+              <input v-model="form.phone" @blur="formatPhone" />
               <p v-if="form.phone && !isUSPhoneNumber(form.phone)" class="validation-error">
                 Please enter a valid US phone number.
               </p>
@@ -182,6 +182,18 @@ const isCurrentActionJoin = computed(() => currentAction.value?.toLowerCase() ==
 function isUSPhoneNumber(phone: string) {
   const pattern = /^\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})$/
   return pattern.test(phone.trim())
+}
+
+// format phone number on blur (e.g. 4155551212 -> (415) 555-1212)
+function formatPhone() {
+  if (!form.value.phone) return
+  const digits = form.value.phone.replace(/\D/g, '')
+  if (digits.length === 10) {
+    form.value.phone = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+  } else {
+    // keep digits only for partial/invalid lengths
+    form.value.phone = digits
+  }
 }
 
 const isFormValid = computed(() => {

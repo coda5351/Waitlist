@@ -64,14 +64,24 @@ public class Entry {
         this.active = active;
     }
 
-    // generate/ensure code and source when the object is persisted or constructed
+    // generate/ensure code and source when the object is persisted or updated
+    // also normalize phone before saving to the DB
     @PrePersist
+    @PreUpdate
     public void ensureCode() {
         if (this.code == null || this.code.isBlank()) {
             this.code = generateCode();
         }
         if (this.source == null) {
             this.source = EntrySource.WEB;
+        }
+        normalizePhone();
+    }
+
+    // strip non-digit characters from phone number
+    private void normalizePhone() {
+        if (this.phone != null) {
+            this.phone = this.phone.replaceAll("\\D", "");
         }
     }
 
