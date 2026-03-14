@@ -160,6 +160,7 @@ public class EntryController {
     @DeleteMapping("/{code}")
     public ResponseEntity<Void> deleteEntry(@PathVariable String code) {
         emitToEntry(code, EventName.DELETED_ENTRY);
+        entryService.deleteEntry(code);       
         return ResponseEntity.ok().build();
     }
 

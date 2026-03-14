@@ -302,10 +302,10 @@ async function sendNotification(id: string, type: 'sms' | 'notify' = 'notify', m
 
 async function guestArrived(id: string) {
   try {
-    const d = await api.delete(`/entries/${id}`)
+    const d = await api.patch(`/entries/${id}/called`, { called: true })
     await throwIfNotOk(d)
   } catch (e) {
-    console.error('delete failed', e)
+    console.error('mark called failed', e)
   }
   status.value.entries = status.value.entries.filter((e: any) => e.code !== id)
   closeModal()
