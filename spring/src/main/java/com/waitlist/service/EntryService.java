@@ -146,14 +146,8 @@ public class EntryService {
      */
     public Entry deleteEntry(String idOrCode) {
         Entry entry = resolve(idOrCode);
-        // log a prominent message whenever an entry is deactivated/deleted
-        logger.info("========== DELETING ENTRY ==========");
-        logger.info("Entry identified for deletion: id={}, code={}, name={} partySize={} active={}",
-                entry.getId(), entry.getCode(), entry.getName(), entry.getPartySize(), entry.isActive());
         entry.setActive(false);
         Entry saved = entryRepository.save(entry);
-        logger.info("Entry marked inactive and saved: id={}, code={}", saved.getId(), saved.getCode());
-        logger.info("====================================");
         return saved;
     }
 
@@ -219,7 +213,7 @@ public class EntryService {
      * Return a list of DTOs for the account's active entries.
      */
     public List<EntryDTO> getAllActiveEntryDtosForAccount(Long accountId) {
-        return getAllActiveEntriesForAccount(accountId).stream()
+        return getAllActiveEntriesForAccount(accountId).stream().filter(e -> !e.isCalled())
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
