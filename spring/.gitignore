@@ -45,6 +45,7 @@ Thumbs.db
 logs/
 # Static files
 src/main/resources/static/
+secret.properties
 
 # Local secret configuration (do not commit API keys / secrets)
 src/main/resources/application-secrets.properties

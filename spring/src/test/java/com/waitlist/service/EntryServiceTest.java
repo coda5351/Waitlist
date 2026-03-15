@@ -27,6 +27,9 @@ public class EntryServiceTest {
     private SmsService smsService;
 
     @Mock
+    private FirebaseService firebaseService;
+
+    @Mock
     private org.springframework.core.env.Environment environment;
 
     @Mock
@@ -227,6 +230,48 @@ public class EntryServiceTest {
         // only code path exercised now
         entryService.sendSmsToEntry("c40", "Another");
         verify(smsService).sendSms(eq(1L), eq("12345"), eq("Another"));
+    }
+
+    @Test
+    public void notifyOfTableSms_usesFirebaseWhenTokenPresent() {
+        Entry e = new Entry("F","333",2);
+        e.setCode("c72");
+        e.setFirebaseAccessToken("token123");
+        com.waitlist.model.Account acct = new com.waitlist.model.Account("foo", null);
+        acct.setId(1L);
+        e.setAccount(acct);
+
+        when(accountService.isWaitlistOpen(anyLong())).thenReturn(true);
+        when(entryRepository.findByCodeAndActiveTrue(anyString())).thenReturn(Optional.of(e));
+        when(accountService.getMessageTemplate(eq(1L), eq(MessageTemplate.TABLE_READY.getKey()))).thenReturn(null);
+        when(environment.getActiveProfiles()).thenReturn(new String[0]);
+        when(firebaseService.sendTableReadyNotification(eq("token123"), anyString())).thenReturn(true);
+
+        entryService.notifyOfTableSms(e, null, MessageTemplate.TABLE_READY);
+
+        verify(firebaseService).sendTableReadyNotification(eq("token123"), contains("Your table is ready"));
+        verifyNoInteractions(smsService);
+    }
+
+    @Test
+    public void notifyOfTableSms_fallsBackToSms_whenFirebaseFails() {
+        Entry e = new Entry("G","444",3);
+        e.setCode("c73");
+        e.setFirebaseAccessToken("token456");
+        com.waitlist.model.Account acct = new com.waitlist.model.Account("foo", null);
+        acct.setId(1L);
+        e.setAccount(acct);
+
+        when(accountService.isWaitlistOpen(anyLong())).thenReturn(true);
+        when(entryRepository.findByCodeAndActiveTrue(anyString())).thenReturn(Optional.of(e));
+        when(accountService.getMessageTemplate(eq(1L), eq(MessageTemplate.TABLE_READY.getKey()))).thenReturn(null);
+        when(environment.getActiveProfiles()).thenReturn(new String[0]);
+        when(firebaseService.sendTableReadyNotification(eq("token456"), anyString())).thenReturn(false);
+
+        entryService.notifyOfTableSms(e, null, MessageTemplate.TABLE_READY);
+
+        verify(firebaseService).sendTableReadyNotification(eq("token456"), contains("Your table is ready"));
+        verify(smsService).sendSms(eq(1L), anyString(), contains("Your table is ready"));
     }
 
     @Test

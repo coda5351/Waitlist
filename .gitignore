@@ -1,1 +1,7 @@
 *.code-workspace
+
+# firebase admin sdk service account key (secret)
+firebase-adminsdk.json
+
+# secret properties file for sensitive configuration
+secret.properties

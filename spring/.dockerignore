@@ -6,3 +6,5 @@ Dockerfile
 docker-compose.yml
 nginx.conf
 .dockerignore
+
+/src/main/resources/firebase-adminsdk.json
