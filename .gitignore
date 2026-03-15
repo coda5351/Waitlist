@@ -1,1 +1,3 @@
 *.code-workspace
+spring/src/main/resources/secret.properties
+firebase-adminsdk.json
