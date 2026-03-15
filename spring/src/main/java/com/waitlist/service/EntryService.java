@@ -27,6 +27,9 @@ public class EntryService {
     private SmsService smsService;
 
     @Autowired
+    private FirebaseService firebaseService;
+
+    @Autowired
     private org.springframework.core.env.Environment environment;
 
     @org.springframework.beans.factory.annotation.Value("${twilio.dev-target:}")
@@ -116,7 +119,14 @@ public class EntryService {
                         entry.getName(),
                         entry.getPhone(),
                         entry.getPartySize());
-                        smsService.sendSms(accountId, to, tableReadyMsgString);
+                        if (entry.getFirebaseAccessToken() != null && !entry.getFirebaseAccessToken().isBlank()) {
+                            boolean sent = firebaseService.sendTableReadyNotification(entry.getFirebaseAccessToken(), tableReadyMsgString);
+                            if (!sent) {
+                                smsService.sendSms(accountId, to, tableReadyMsgString);
+                            }
+                        } else {
+                            smsService.sendSms(accountId, to, tableReadyMsgString);
+                        }
                         break;
                     case "newEntry":
                         String newEntryMsgString = String.format(template,

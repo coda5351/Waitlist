@@ -26,6 +26,11 @@ public class Entry {
 
     private String name;
     private String phone;
+
+    // Firebase access token used by the mobile client; should not be exposed via the REST DTO
+    @Column(name = "firebase_access_token", length = 512)
+    private String firebaseAccessToken;
+
     @Column(name = "party_size")
     private int partySize;
 
