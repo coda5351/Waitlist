@@ -87,12 +87,14 @@ public class EntryController {
         emitters.removeAll(dead);
     }
 
-    private void emitToEntry(String entryCode, EventName eventName) {
+    private void emitToEntry(String entryCode, EventName eventName, String message, String subMessage) {
         EntryDTO dto = entryService.toDto(entryService.resolve(entryCode));
-        Map<String,Object> payload = Map.of(
-                "entry", dto,
-                "estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(dto.getAccountId()))
-        );
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("entry", dto);
+        payload.put("estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(dto.getAccountId())));
+        payload.put("eventName", eventName.getValue());
+        if (message != null) payload.put("message", message);
+        if (subMessage != null) payload.put("subMessage", subMessage);
         sendEvent(eventName, payload);
     }
 
@@ -120,7 +122,7 @@ public class EntryController {
     public ResponseEntity<EntryDTO> createEntry(@PathVariable String code, @RequestBody Entry entry) {
         Entry saved = entryService.create(code, entry);
         // push update so clients can append the new entry without polling
-        emitToEntry(saved.getCode(), EventName.NEW_ENTRY);
+        emitToEntry(saved.getCode(), EventName.NEW_ENTRY, null, null);
         return ResponseEntity.ok(entryService.toDto(saved));
     }
 
@@ -140,7 +142,7 @@ public class EntryController {
             entryService.notifyOfTableSms(null, code, MessageTemplate.TABLE_READY);
         }
         // notify listening clients that this entry has been called
-        emitToEntry(code, EventName.NOTIFIED_ENTRY);
+        emitToEntry(code, EventName.NOTIFIED_ENTRY, "Your table is ready -- please proceed to the host stand.", null);
         return ResponseEntity.ok().build();
     }
 
@@ -153,13 +155,13 @@ public class EntryController {
         String message = req.getOrDefault("message", "");
         entryService.sendSmsToEntry(code, message);
         // notify listening clients that this entry has been contacted via SMS
-        emitToEntry(code, EventName.NOTIFIED_ENTRY);
+        emitToEntry(code, EventName.NOTIFIED_ENTRY, message, null);
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{code}")
     public ResponseEntity<Void> deleteEntry(@PathVariable String code) {
-        emitToEntry(code, EventName.DELETED_ENTRY);
+        emitToEntry(code, EventName.DELETED_ENTRY, "Your table has already been called or you are not on the list.", "Sign up again to join the wait list.");
         entryService.deleteEntry(code);       
         return ResponseEntity.ok().build();
     }
@@ -168,7 +170,7 @@ public class EntryController {
     public ResponseEntity<EntryDTO> setCalled(@PathVariable String code, @RequestBody Map<String,Boolean> req) {
         boolean called = req.getOrDefault("called", false);
         Entry updated = entryService.markCalled(code, called);
-        emitToEntry(code, EventName.UPDATED_ENTRY);
+        emitToEntry(code, EventName.UPDATED_ENTRY, "Your table has already been called or you are not on the list.", "Sign up again to join the wait list.");
         return ResponseEntity.ok(entryService.toDto(updated));
     }
 
