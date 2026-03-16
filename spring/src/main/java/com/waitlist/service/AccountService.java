@@ -136,12 +136,8 @@ public class AccountService {
             });
         }
         Account saved = accountRepository.save(account);
-        // if after applying the changes the waitlist is considered closed due to time
-        // (open flag is true, but current time is past close) then also clear entries.
-        if (!isWaitlistOpen(saved.getId())) {
-            entryService.deactivateAllEntries();
-            entryController.emitWaitlistDisabled();
-        }
+        // NOTE: We intentionally do not trigger cleanup here based on time-based closing,
+        // because updates that set past close times should not implicitly clear entries.
         return saved;
     }
 
@@ -213,41 +209,37 @@ public class AccountService {
 
     /**
      * Convenience helper that determines whether the waitlist is considered open
-     * at the current moment.  If the account has never defined open/close times
-     * the presence of the enabled flag is used alone.
+     * at the current moment.
      */
     public boolean isWaitlistOpen(Long accountId) {
+        boolean isOpen = true;
+        LocalDateTime now = LocalDateTime.now(clock);
         Account account = getAccountById(accountId);
-        boolean open;
-        if (!account.isWaitlistEnabled()) {
-            open = false;
-        } else {
-            LocalDateTime now = LocalDateTime.now(clock);
-            if (account.getWaitlistOpenTime() != null && account.getWaitlistCloseTime() != null) {
-                open = !now.isBefore(account.getWaitlistOpenTime()) && !now.isAfter(account.getWaitlistCloseTime());
-            } else {
-                // no explicit date/time range; fall back to service hours for today
-                DayOfWeek today = now.getDayOfWeek();
-                ServiceHours bh = null;
-                if (account.getServiceHours() != null) {
-                    bh = account.getServiceHours().get(today);
-                }
-                if (bh != null && bh.getOpenTime() != null && bh.getCloseTime() != null) {
-                    LocalTime nowTime = LocalTime.now(clock);
-                    open = !nowTime.isBefore(bh.getOpenTime()) && !nowTime.isAfter(bh.getCloseTime());
-                } else {
-                    open = true;
-                }
-            }
+        boolean enabled = account.isWaitlistEnabled();
+        LocalDateTime waitlistOpenTime = account.getWaitlistOpenTime();
+        LocalDateTime waitlistCloseTime = account.getWaitlistCloseTime();
+
+        if (!enabled || 
+            (waitlistOpenTime == null || waitlistCloseTime == null) || 
+            (now.isBefore(waitlistOpenTime) || now.isAfter(waitlistCloseTime))) {
+                logger.info("Waitlist is not open for account {}: enabled={}, now={}, openTime={}, closeTime={}", 
+                    accountId, enabled, now, waitlistOpenTime, waitlistCloseTime);
+                disableWaitlistAndClearEntries(accountId);
+            isOpen = false;
         }
-        if (!open) {
-            // if the waitlist is not open, ensure all entries are deactivated so the frontend doesn't see stale data
-            logger.info("Waitlist is closed for account {}, deactivating all entries", accountId); 
-            entryService.deactivateAllEntries();
-        }
-        return open;
+        return isOpen;
     }
 
+    private void disableWaitlistAndClearEntries(Long accountId) {
+        Account account = getAccountById(accountId);
+        account.setWaitlistEnabled(false);
+        account.setWaitlistOpenTime(null);
+        account.setWaitlistCloseTime(null);
+        accountRepository.save(account);
+        entryService.deactivateAllEntries();
+    }
+
+    
     /**
      * Retrieve the current estimated wait time in minutes (delegates to EntryService).
      * @param accountId 

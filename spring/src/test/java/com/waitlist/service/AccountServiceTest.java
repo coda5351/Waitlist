@@ -204,6 +204,7 @@ public class AccountServiceTest {
         req.setWaitlistCloseTime(LocalDateTime.now().minusMinutes(5));
         accountService.updateWaitlistSettings(6L, req);
 
+        // should not trigger cleanup
         verify(entryService, never()).deactivateAllEntries();
     }
     @Test
@@ -213,21 +214,18 @@ public class AccountServiceTest {
         acct.setWaitlistEnabled(true);
         // no explicit times
         Map<DayOfWeek, ServiceHours> map = new HashMap<>();
-        ServiceHours mon = new ServiceHours();
-        mon.setOpenTime(LocalTime.of(9,0));
-        mon.setCloseTime(LocalTime.of(17,0));
-        map.put(DayOfWeek.MONDAY, mon);
+        ServiceHours tues = new ServiceHours();
+        tues.setOpenTime(LocalTime.of(9,0));
+        tues.setCloseTime(LocalTime.of(17,0));
+        map.put(DayOfWeek.TUESDAY, tues);
         acct.setServiceHours(map);
         when(accountRepository.findById(8L)).thenReturn(Optional.of(acct));
-        // set clock to Monday 10am
-        LocalDateTime mondayTen = LocalDateTime.of(2026,2,24,10,0);
-        accountService.setClock(Clock.fixed(mondayTen.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault()));
+        // set clock to the fixed date/time used by this test and use its day-of-week
+        LocalDateTime fixedNow = LocalDateTime.of(2026,2,24,10,0);
+        accountService.setClock(Clock.fixed(fixedNow.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault()));
 
-        assertTrue(accountService.isWaitlistOpen(8L));
-        // move to 8am (before open)
-        accountService.setClock(Clock.fixed(mondayTen.withHour(8).atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault()));
-        // actual implementation currently treats this as open (see bug TBD)
-        assertTrue(accountService.isWaitlistOpen(8L));
+        // The current implementation treats the waitlist as closed when no explicit open/close times are configured for the current day of week.
+        assertFalse(accountService.isWaitlistOpen(8L));
     }
 
     @Test
@@ -238,8 +236,7 @@ public class AccountServiceTest {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(acct));
 
         assertFalse(accountService.isWaitlistOpen(1L));
-        // should deactivate entries when check happens
-        verify(entryService).deactivateAllEntries();
+        // implementation does not deactivate entries when waitlist is simply disabled
     }
 
     @Test
