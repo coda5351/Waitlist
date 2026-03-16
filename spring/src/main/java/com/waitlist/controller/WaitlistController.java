@@ -29,15 +29,20 @@ public class WaitlistController {
         Account account = accountService.getAccountByCode(code);
         boolean open = accountService.isWaitlistOpen(account.getId());
         int estimate = accountService.getEstimatedWaitMinutes(account.getId());
-        Map<String, Object> body = Map.of(
-                "open", open,
-                "enabled", account.isWaitlistEnabled(),
-                "openTime", account.getWaitlistOpenTime(),
-                "closeTime", account.getWaitlistCloseTime(),
-                "serviceHours", account.getServiceHours(),
-                "estimatedWait", estimate,
-                "entries", entryService.getAllActiveEntryDtosForAccount(account.getId())
-        );
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("open", open);
+        body.put("enabled", account.isWaitlistEnabled());
+        if (account.getWaitlistOpenTime() != null) {
+            body.put("openTime", account.getWaitlistOpenTime());
+        }
+        if (account.getWaitlistCloseTime() != null) {
+            body.put("closeTime", account.getWaitlistCloseTime());
+        }
+        if (account.getServiceHours() != null) {
+            body.put("serviceHours", account.getServiceHours());
+        }
+        body.put("estimatedWait", estimate);
+        body.put("entries", entryService.getAllActiveEntryDtosForAccount(account.getId()));
         return ResponseEntity.ok(body);
     }
 
