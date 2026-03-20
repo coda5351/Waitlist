@@ -1,5 +1,6 @@
 package com.waitlist.controller;
 
+import com.waitlist.exception.ResourceNotFoundException;
 import com.waitlist.model.Account;
 import com.waitlist.model.Entry;
 import com.waitlist.service.AccountService;
@@ -49,6 +50,11 @@ public class WaitlistController {
     @GetMapping("entry/{code}/status")
     public ResponseEntity<Map<String, Object>> getEntryWaitlistStatus(@PathVariable String code) {
         Entry entry = entryService.resolve(code);
+
+        if (entry.isCalled()) {
+            throw new ResourceNotFoundException("Entry not found: " + code) ;
+        }
+
         boolean open = accountService.isWaitlistOpen(entry.getAccount().getId());
         int estimate = accountService.getEstimatedWaitMinutes(entry.getAccount().getId());
         Map<String, Object> body = Map.of(
