@@ -88,7 +88,7 @@ public class EntryController {
     }
 
     private void emitToEntry(String entryCode, EventName eventName, String message, String subMessage) {
-        EntryDTO dto = entryService.toDto(entryService.resolve(entryCode));
+        EntryDTO dto = entryService.toDto(entryService.resolveFailOk(entryCode));
         Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("entry", dto);
         payload.put("estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(dto.getAccountId())));
@@ -102,7 +102,13 @@ public class EntryController {
      * Notify clients that the entire waitlist has been disabled (closed).
      */
     public void emitWaitlistDisabled() {
-        sendEvent(EventName.WAITLIST_DISABLED, "");
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("entry", null);
+        payload.put("estimatedWait", 0);
+        payload.put("eventName", EventName.WAITLIST_DISABLED.getValue());
+        payload.put("message", "The waitlist has been closed by the host.");
+        payload.put("subMessage", "Hope to see you again when we reopen!");
+        sendEvent(EventName.WAITLIST_DISABLED, payload);
     }
 
     /**
@@ -160,10 +166,19 @@ public class EntryController {
     }
 
     @DeleteMapping("/{code}")
-    public ResponseEntity<Void> deleteEntry(@PathVariable String code) {
-        emitToEntry(code, EventName.DELETED_ENTRY, "Your table has already been called or you are not on the list.", "Sign up again to join the wait list.");
-        entryService.deleteEntry(code);       
-        return ResponseEntity.ok().build();
+    public ResponseEntity<Map<String, Object>> deleteEntry(@PathVariable String code) {
+        String message = "You have been removed from the waitlist.";
+        String subMessage = "If you were recently called, please contact the host. Otherwise, feel free to join again!";
+        emitToEntry(code, EventName.DELETED_ENTRY, message, subMessage);
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("entry", null);
+        payload.put("code", code);
+        payload.put("estimatedWait", 0);
+        payload.put("eventName", EventName.DELETED_ENTRY.getValue());
+        payload.put("message", message);
+        payload.put("subMessage", subMessage);
+        entryService.deleteEntry(code);
+        return ResponseEntity.ok(payload);
     }
 
     @PatchMapping("/{code}/called")

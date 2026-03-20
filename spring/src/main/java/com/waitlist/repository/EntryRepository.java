@@ -20,4 +20,6 @@ public interface EntryRepository extends JpaRepository<Entry, Long> {
     void deactivateAll();
 
     List<Entry> findAllByAccountIdAndActiveTrue(Long accountId);
+
+    List<Entry> findAllByAccountIdAndActiveTrueAndCalledFalse(Long accountId);
 }

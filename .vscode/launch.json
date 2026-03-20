@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "WaitlistApplication",
+            "request": "launch",
+            "mainClass": "com.waitlist.WaitlistApplication",
+            "projectName": "taskmosaic-crm"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-WaitlistApplication<waitlist>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.waitlist.WaitlistApplication",
+            "projectName": "waitlist",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}
