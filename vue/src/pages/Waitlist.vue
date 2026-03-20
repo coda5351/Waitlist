@@ -2,71 +2,45 @@
   <div class="waitlist-page">
     <h2>{{ currentAction?.toLowerCase() == 'join' ? 'Join' : 'View' }} the Waitlist</h2>
 
-    <p v-if="status">
-      <em>Current status: <strong>{{ status.open ? 'Open' : 'Closed' }}</strong></em>
-    </p>
-    <p v-if="showWaitTimeMessage">
-      <em>Approximate wait time: <strong>{{ status.estimatedWait }} minutes</strong></em>
-    </p>
+    <div v-if="status">
+      <p>
+        <em>We are currently <strong>{{ status.open ? 'open' : 'closed' }}</strong>.</em><br />
+        <em>Approximate wait time: <strong>{{ status.estimatedWait }} minutes</strong></em>
+      </p>
+    </div>
 
-    <!-- show form if waitlist is enabled and open, and user doesn't have an active entry -->
     <div v-if="showWaitlistJoinForm" class="form-container">
       <div class="form-wrapper">
         <div class="form-card">
           <h1>Sign up</h1>
           <form @submit.prevent="submit">
-            <p v-if="showDisabledMessage" class="alert">
-              The waitlist has been disabled; your entry is no longer valid.
-            </p>
             <div class="form-group">
-              <label>Name:</label>
-              <input v-model="form.name" />
+              <input v-model="form.name" placeholder="Name" />
             </div>
             <div class="form-group">
-              <label>Phone:</label>
-              <input v-model="form.phone" @blur="formatPhone" />
+              <input v-model="form.phone" @blur="formatPhone" placeholder="Phone" />
               <p v-if="form.phone && !isUSPhoneNumber(form.phone)" class="validation-error">
                 Please enter a valid US phone number.
               </p>
             </div>
             <div class="form-group">
-              <label>Party size:</label>
-              <input type="number" v-model.number="form.partySize" min="1" />
+              <input type="number" v-model.number="form.partySize" min="1" placeholder="Party size" />
             </div>
-            <div class="form-group">
-              <label>Waitlist Code:</label>
-              <input type="text" disabled v-model.number="currentCode" />
-            </div>
+            <input type="hidden" :value="currentCode" />
             <button :disabled="!isFormValid" type="submit">Join</button>
           </form>
         </div>
       </div>
     </div>
 
-    <!-- if waitlist is disabled or closed, show message -->
-    <div v-if="showDisabledMessageComputed || showDisabledMessage" class="ready-message warning-message" >
-      <h3>The waitlist is currently closed.</h3>
-      <p>Please check back later or ask the host for more information.</p>
-    </div>
+    <StatusMessage
+      v-if="statusMessage?.showMessage"
+      :message="statusMessage?.message"
+      :subMessage="statusMessage?.subMessage"
+      :eventName="statusMessage?.eventName"
+    />
 
-    <!-- show ready message if notified -->
-    <div v-if="showReadyMessage" class="ready-message">
-      <h3>Your table is ready -- please proceed to the host stand.</h3>
-    </div>
-
-    <!-- show left message if user has left the waitlist -->
-    <div v-if="showLeftMessage" class="ready-message">
-      <h3>You have left the waitlist -- have a nice day!</h3>
-    </div>
-
-    <!-- if user is missing from list show warning that they may have been called -->
-    <div v-if="showMissingEntryMessage" class="ready-message warning-message">
-      <h3>Your table has already been called or you are not on the list.</h3>
-      <p>Sign up again to join the wait list.</p>
-    </div>
-
-    <!-- waitlist table -->
-    <div v-if="showWaitlistTable && !showMissingEntryMessage" class="list">
+    <div v-if="showWaitlistTable" class="list">
       <h3>Current Waitlist</h3>
       <DataTable :columns="columns" :rows="entries">
         <template #row="{ row }">
@@ -112,14 +86,21 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, throwIfNotOk, getApiUrl } from '@/utils/api'
 import DataTable from '@/components/DataTable.vue'
-import { WaitlistEvent, type WaitlistEventName } from '@/types/waitlistEvents'
+import StatusMessage from '@/components/StatusMessage.vue'
+import { WaitlistEvent } from '@/types/waitlistEvents'
+import { useWaitlistSse } from '@/composables/useWaitlistSse'
+import type { StatusMessage as StatusMessageType } from '@/types/statusMessage'
 
 const entries = ref<any[]>([])
-let source: EventSource | null = null
+const { init: initSse, stop: stopSse } = useWaitlistSse()
+let statusPollInterval: number | null = null
 
-function addSseListener(event: WaitlistEventName, handler: (e: MessageEvent) => void) {
-  if (!source) return
-  source.addEventListener(event, handler)
+function stopRealtimeUpdates() {
+  stopSse()
+  if (statusPollInterval !== null) {
+    clearInterval(statusPollInterval)
+    statusPollInterval = null
+  }
 }
 
 const leaveDialogVisible = ref(false)
@@ -135,31 +116,16 @@ import { formatTime } from '@/utils/dateFormatter'
 const status = ref<any>(null)
 const showDisabledMessage = ref(false)
 const wasEnabled = ref<boolean | null>(null)
-const form = ref({ name: '', phone: '', partySize: 1 })
-const tableReady = ref(false)
-const missingEntry = ref(false)
+const form = ref({ name: '', phone: '', partySize: null as number | null })
 const listDisabledNotice = ref(false)
-const showLeftMessage = ref(false)
+const statusMessage = ref<any | null>(null)
 
-const showWaitTimeMessage = computed(() => {
-  return status.value && status.value.open && status.value.estimatedWait !== undefined && !tableReady.value
-})
 const showWaitlistJoinForm = computed(() => {
-  return showWaitTimeMessage.value && isCurrentActionJoin.value
-})
-const showDisabledMessageComputed = computed(() => {
-  return status.value && !status.value.open
-})
-const showReadyMessage = computed(() => {
-  return tableReady.value && !isCurrentActionJoin.value
+  return currentAction.value?.toLowerCase() === 'join' && !statusMessage.value?.showMessage
 })
 const showWaitlistTable = computed(() => {
-  return entries.value.length > 0 && !isCurrentActionJoin.value && !tableReady.value
+  return currentAction.value?.toLowerCase() === 'view' && !statusMessage.value?.showMessage
 })
-const showMissingEntryMessage = computed(() => {
-  return missingEntry.value && !showLeftMessage.value
-})
-
 
 const route = useRoute()
 const router = useRouter()
@@ -200,7 +166,7 @@ const isFormValid = computed(() => {
   return (
     form.value.name.trim() !== '' &&
     isUSPhoneNumber(form.value.phone) &&
-    form.value.partySize > 0
+    (form.value.partySize !== null && form.value.partySize > 0)
   )
 })
 
@@ -213,10 +179,18 @@ function confirmLeave(code: string) {
 async function performLeave() {
   if (!leaveTargetId.value) return
   try {
+    stopRealtimeUpdates()
     const resp = await api.delete(`/entries/${leaveTargetId.value}`)
+    console.log('leave response', resp)
     await throwIfNotOk(resp)
     entries.value = []
-    showLeftMessage.value = true
+    const payload = await resp.json()
+    statusMessage.value = {
+        showMessage: true,
+        message: payload?.message,
+        subMessage: payload?.subMessage,
+        eventName: payload?.eventName
+      } as StatusMessageType
   } catch (e) {
     console.error('leave spot failed', e)
   } finally {
@@ -244,7 +218,12 @@ async function fetchStatus() {
       entries.value = newStatus.entries?.map((e: any, i: number) => ({ ...e, idx: i + 1, timestamp: formatTime(e.timestamp) })) || []
     } else if (resp.status === 404) {
       // if we get a 404 it means the entry is missing, which could be because they were called or never existed
-      missingEntry.value = true
+      statusMessage.value = {
+        showMessage: true,
+        message: "We couldn't find your spot on the waitlist.",
+        subMessage: "If you were recently called, please contact the host. Otherwise, feel free to join again!",
+        eventName: WaitlistEvent.DELETED_ENTRY
+      } as StatusMessageType
     }
   } catch (err: Promise<Response> | any) {
     console.error('fetch status failed', err)
@@ -258,7 +237,7 @@ async function submit() {
     const json = await resp.json()
     form.value.name = ''
     form.value.phone = ''
-    form.value.partySize = 1
+    form.value.partySize = null
     if (json && json.code) {
       // update URL to include the code as a path segment (and clear query param)
       router.replace({ path: `/waitlist/view/${json.code}` })
@@ -279,71 +258,72 @@ async function submit() {
   }
 }
 
-function checkEntryPresence() {
-  // if we've gotten a ready notification or the list is disabled, don't mark missing
-  if (tableReady.value || listDisabledNotice.value) {
-    missingEntry.value = false
-    return
-  }
-  if (currentCode.value) {
-    missingEntry.value = !entries.value.some(e => e.code === currentCode.value)
-  } else {
-    missingEntry.value = false
+function getEventMessageForEntryAndSetWaitTime(e: MessageEvent) {
+  try {
+    const payload = JSON.parse(e.data)
+    if (payload.estimatedWait !== undefined && status.value) {
+      status.value.estimatedWait = payload.estimatedWait
+    }
+    const eventEntryCode = payload.entry?.code || null
+    if (payload.eventName === WaitlistEvent.WAITLIST_DISABLED) {
+      statusMessage.value = {
+        showMessage: true,
+        message: payload.message,
+        subMessage: payload.subMessage,
+        eventName: payload.eventName
+      } as StatusMessageType
+      status.value.open = false
+    } else if (eventEntryCode && eventEntryCode === currentCode.value) {
+      statusMessage.value = {
+        showMessage: true,
+        message: payload.message,
+        subMessage: payload.subMessage,
+        eventName: payload.eventName
+      } as StatusMessageType
+    }
+  } catch {
+    statusMessage.value = {
+      showMessage: true,
+      message: "Could not parse update message",
+      subMessage: null,
+      eventName: null
+    } as unknown as StatusMessageType
   }
 }
 
 function initEventSource() {
-  if (source) return; // already subscribed
-  try {
-    const streamUrl = getApiUrl('/entries/stream')
-    source = new EventSource(streamUrl)
-    addSseListener(WaitlistEvent.NEW_ENTRY, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data)
+  const streamUrl = getApiUrl('/entries/stream')
+  initSse(streamUrl, {
+    onNewEntry(payload) {
       const entry = payload.entry || payload
-      if (payload.estimatedWait !== undefined) {
-        // keep status estimate up-to-date
-        if (status.value) status.value.estimatedWait = payload.estimatedWait
-      }
       entries.value.push({ ...entry, idx: entries.value.length + 1, timestamp: formatTime(entry.timestamp) })
-    })
-    addSseListener(WaitlistEvent.DELETED_ENTRY, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data)
-      const code = payload.code || String(e.data)
-      if (payload.estimatedWait !== undefined && status.value) {
-        status.value.estimatedWait = payload.estimatedWait
-      }
-      entries.value = entries.value.filter(r => r.code !== code)
-      entries.value = entries.value.map((r,i) => ({ ...r, idx: i+1 }))
-      checkEntryPresence()
-    })
-    addSseListener(WaitlistEvent.UPDATED_ENTRY, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data)
+      getEventMessageForEntryAndSetWaitTime({ data: JSON.stringify(payload) } as MessageEvent)
+    },
+    onDeletedEntry(payload) {
+      const deletedEntry = payload.entry || payload.code || payload
+      entries.value = entries.value.filter(r => r.code !== deletedEntry.code)
+      entries.value = entries.value.map((r, i) => ({ ...r, idx: i + 1 }))
+      getEventMessageForEntryAndSetWaitTime({ data: JSON.stringify(payload) } as MessageEvent)
+    },
+    onUpdatedEntry(payload) {
       const updated = payload.entry || payload
-      if (payload.estimatedWait !== undefined && status.value) {
-        status.value.estimatedWait = payload.estimatedWait
-      }
-      entries.value = entries.value.map(r => r.code === updated.code ? { ...r, ...updated, timestamp: formatTime(updated.timestamp) } : r)
-      checkEntryPresence()
-    })
-    addSseListener(WaitlistEvent.NOTIFIED_ENTRY, (e: MessageEvent) => {
-      const id = String(e.data)
-      if (currentCode.value === id) {
-        tableReady.value = true
-      }
-    })
-    addSseListener(WaitlistEvent.WAITLIST_DISABLED, () => {
-      // show notice but avoid duplicate popups
-      listDisabledNotice.value = true
-      tableReady.value = false
+      entries.value = entries.value.filter(r => r.code !== updated.code)
+      getEventMessageForEntryAndSetWaitTime({ data: JSON.stringify(payload) } as MessageEvent)
+    },
+    onNotifiedEntry(payload) {
+      const notified = payload.entry || payload
+      entries.value = entries.value.filter(r => r.code !== notified.code)
+      getEventMessageForEntryAndSetWaitTime({ data: JSON.stringify(payload) } as MessageEvent)
+    },
+    onWaitlistDisabled(payload) {
+      getEventMessageForEntryAndSetWaitTime({ data: JSON.stringify(payload) } as MessageEvent)
       fetchStatus()
-    })
-  } catch (ex) {
-    console.warn('could not open event stream', ex)
-    // fall back to polling
-    setInterval(() => {
-      fetchStatus()
-    }, 30000)
-  }
+    },
+    onError(err) {
+      console.warn('could not open event stream', err)
+      statusPollInterval = window.setInterval(() => fetchStatus(), 30000)
+    }
+  })
 }
 
 onMounted(async () => {
@@ -354,7 +334,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (source) source.close()
+  stopRealtimeUpdates()
 })
 </script>
 
@@ -368,22 +348,50 @@ onUnmounted(() => {
   justify-content: center;
   align-items: flex-start;
   min-height: 100vh;
-  padding: 40px 20px 20px;
+  padding: 20px 20px 0;
 }
 .form-wrapper {
   display: flex;
+  justify-content: center;
   gap: 30px;
   max-width: 900px;
   width: 100%;
 }
+
 .form-card {
+  margin: 0 auto;
+  width: 100%;
+  max-width: 420px;
   background: white;
-  padding: 40px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  flex: 1;
-  max-width: 400px;
+  padding: 32px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
+
+.form-card h1 {
+  margin-bottom: 1rem;
+  font-size: 1.6rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  font-size: 0.95rem;
+  color: #444;
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+  transition: border-color 0.3s;
+}
+
 
 .list table {
   width: 100%;
@@ -433,6 +441,7 @@ input:focus {
 
 button {
   width: 100%;
+  margin-top: 16px;
   padding: 14px;
   background-color: var(--theme-color, #4CAF50);
   color: white;

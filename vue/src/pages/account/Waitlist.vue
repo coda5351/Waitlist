@@ -53,9 +53,9 @@
               </td>
               <td>{{ row.idx }}</td>
               <td>{{ row.name }}</td>
-                    <td>{{ formatPhoneNumber(row.phone) }}</td>
+              <td>{{ formatPhoneNumber(row.phone) }}</td>
               <td>{{ row.partySize }}</td>
-              <td>{{ row.timestamp }}</td>
+              <td>{{ formatTime(row.timestamp) }}</td>
             </tr>
           </template>
         </DataTable>
@@ -144,7 +144,7 @@ import DataTable from '@/components/DataTable.vue'
 import { formatTime } from '@/utils/dateFormatter'
 import { formatPhoneNumber, phoneLink } from '@/utils/phoneFormatter'
 import { toDataURL } from 'qrcode'
-import { WaitlistEvent, type WaitlistEventName } from '@/types/waitlistEvents'
+import { useWaitlistSse } from '@/composables/useWaitlistSse'
 
 const store = useStore()
 const user = computed(() => store.getters.user)
@@ -435,57 +435,40 @@ const saveWaitlistSettings = async () => {
   }
 }
 
-let source: EventSource | null = null
-
-function addSseListener(event: WaitlistEventName, handler: (e: MessageEvent) => void) {
-  if (!source) return
-  source.addEventListener(event, handler)
-}
+const { init: initSse, stop: stopSse } = useWaitlistSse()
 
 onMounted(async () => {
   populate()
   fetchStatus()
-  // establish server-sent event stream for live updates
-  try {
-    // build full URL via utility to keep base config logic
-    const streamUrl = getApiUrl('/entries/stream')
-    source = new EventSource(streamUrl)
-    addSseListener(WaitlistEvent.NEW_ENTRY, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data)
+
+  const streamUrl = getApiUrl('/entries/stream')
+  initSse(streamUrl, {
+    onNewEntry(payload) {
       const entry = payload.entry || payload
-      if (payload.estimatedWait !== undefined && status.value) {
-        status.value.estimatedWait = payload.estimatedWait
-      }
-      // compute formatted fields identical to initial load
       const idx = status.value.entries.length + 1
       status.value.entries.push({ ...entry, idx, timestamp: formatTime(entry.timestamp) })
-    })
-    addSseListener(WaitlistEvent.DELETED_ENTRY, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data)
-      const code = payload.entry.code || String(e.data)
-      if (payload.estimatedWait !== undefined && status.value) {
-        status.value.estimatedWait = payload.estimatedWait
-      }
+    },
+    onDeletedEntry(payload) {
+      const code = payload.entry?.code || String(payload)
       status.value.entries = status.value.entries.filter((r: any) => r.code !== code)
-      // re-index rows
-      status.value.entries = status.value.entries.map((r: any, i: number) => ({ ...r, idx: i+1 }))
-    })
-    addSseListener(WaitlistEvent.UPDATED_ENTRY, (e: MessageEvent) => {
-      const payload = JSON.parse(e.data)
+      status.value.entries = status.value.entries.map((r: any, i: number) => ({ ...r, idx: i + 1 }))
+    },
+    onUpdatedEntry(payload) {
       const updated = payload.entry || payload
-      if (payload.estimatedWait !== undefined && status.value) {
-        status.value.estimatedWait = payload.estimatedWait
-      }
-      status.value.entries = status.value.entries.map((r: { code: any }) => r.code === updated.code ? { ...r, ...updated, timestamp: formatTime(updated.timestamp) } : r)
-    })
-    addSseListener(WaitlistEvent.NOTIFIED_ENTRY, (e: MessageEvent) => {
-      const code = String(e.data)
-      // optionally flag entry locally so UI can show it has been notified
-      status.value.entries = status.value.entries.map((r: { code: string }) => r.code === code ? { ...r, notified: true } : r)
-    })
-  } catch (ex) {
-    console.warn('could not open event stream', ex)
-  }
+      status.value.entries = status.value.entries.map((r: { code: any }) =>
+        r.code === updated.code ? { ...r, ...updated, timestamp: formatTime(updated.timestamp) } : r
+      )
+    },
+    onNotifiedEntry(payload) {
+      const code = payload.entry?.code || String(payload)
+      status.value.entries = status.value.entries.map((r: { code: string }) =>
+        r.code === code ? { ...r, notified: true } : r
+      )
+    },
+    onError(error) {
+      console.warn('could not open event stream', error)
+    }
+  })
 })
 
 // regenerate the QR code whenever the account code changes
@@ -506,7 +489,7 @@ async function updateQRCode() {
 watch(() => user.value?.account?.code, updateQRCode, { immediate: true })
 
 onUnmounted(() => {
-  if (source) source.close()
+  stopSse()
   if (notifyTimer) clearInterval(notifyTimer)
   if (smsTimer) clearInterval(smsTimer)
 })

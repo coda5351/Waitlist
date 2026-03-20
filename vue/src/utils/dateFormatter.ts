@@ -4,7 +4,8 @@
  * @returns Formatted date string in MM/DD/YYYY format
  */
 export const formatDate = (dateString: string): string => {
-  const date = new Date(dateString)
+  const normalized = normalizeDateString(dateString)
+  const date = new Date(normalized)
   return date.toLocaleDateString('en-US', { 
     month: '2-digit', 
     day: '2-digit', 
@@ -18,7 +19,8 @@ export const formatDate = (dateString: string): string => {
  * @returns Formatted date and time string
  */
 export const formatDateTime = (dateString: string): string => {
-  const date = new Date(dateString)
+  const normalized = normalizeDateString(dateString)
+  const date = new Date(normalized)
   const opts: Intl.DateTimeFormatOptions = {
     day: '2-digit',
     month: '2-digit',
@@ -33,8 +35,14 @@ export const formatDateTime = (dateString: string): string => {
 /**
  * Extract just the time (hh:mm AM/PM) portion from a date string.
  */
+const normalizeDateString = (dateString: string): string => {
+  // Strip microseconds beyond millisecond precision (JS Date supports max 3 digits)
+  return dateString.replace(/(\.\d{3})\d*/, '$1')
+}
+
 export const formatTime = (dateString: string): string => {
-  const date = new Date(dateString)
+  const normalized = normalizeDateString(dateString)
+  const date = new Date(normalized)
   const opts: Intl.DateTimeFormatOptions = {
     hour: 'numeric',
     minute: '2-digit',

@@ -155,21 +155,20 @@ public class EntryService {
      * Delete an entry from the waitlist.
      */
     /**
-     * Delete an entry from the waitlist by numeric id or public code.
-     * Returns the modified entity so callers can inspect its code if needed.
+     * Delete an entry from the waitlist by code.
      */
-    public Entry deleteEntry(String idOrCode) {
-        Entry entry = resolve(idOrCode);
+    public Entry deleteEntry(String code) {
+        Entry entry = resolve(code);
         entry.setActive(false);
-        Entry saved = entryRepository.save(entry);
+        Entry saved = entryRepository.save(entry);    
         return saved;
     }
 
     /**
      * Mark entry as called/arrived status.
      */
-    public Entry markCalled(String idOrCode, boolean called) {
-        Entry entry = resolve(idOrCode);
+    public Entry markCalled(String code, boolean called) {
+        Entry entry = resolve(code);
         entry.setCalled(called);
         return entryRepository.save(entry);
     }
@@ -207,19 +206,25 @@ public class EntryService {
     }
 
     /**
-     * Lookup an entry either by numeric ID or by public code.
+     * Lookup an entry either by code.
      */
     public Entry resolve(String code) {
         if (code == null) {
             throw new ResourceNotFoundException("Entry identifier is null");
         }
-        // not a number, look up by code
         return entryRepository.findByCodeAndActiveTrue(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Entry not found: " + code));
     }
 
+    public Entry resolveFailOk(String code) {
+        if (code == null) {
+            return null;
+        }
+        return entryRepository.findByCodeAndActiveTrue(code).orElse(null);
+    }
+
     public List<Entry> getAllActiveEntriesForAccount(Long accountId) {
-        List<Entry> entries = entryRepository.findAllByAccountIdAndActiveTrue(accountId);
+        List<Entry> entries = entryRepository.findAllByAccountIdAndActiveTrueAndCalledFalse(accountId);
         return entries;
     }
 
