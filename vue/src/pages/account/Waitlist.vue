@@ -82,37 +82,20 @@
           </ul>
         </div>
         <p>What would you like to do?</p>
-        <p v-if="!smsConfigured || smsFailed" class="foot-note">
-          If you would like to notify the customer by SMS, configure your Twilio account in
-          <router-link to="/account/account#twilio" class="link-inline">Account Settings</router-link>.
-        </p>
-        <p v-if="!smsEnabled" class="foot-note">
-          Sms has been disabled, click the send sms to simulate the notification being sent without actually sending a message. This is useful for testing or if you have SMS configured but it is currently failing.
-        </p>
-        <div v-if="smsCooldown > 0 || notifyCooldown > 0">
+        <div v-if="notifyCooldown > 0">
           <span class="cooldown-msg">
-            You can send another message in {{ smsCooldown > 0 ? smsCooldown : notifyCooldown }} second{{ (smsCooldown > 0 ? smsCooldown : notifyCooldown) === 1 ? '' : 's' }}
+            You can send another message in {{ notifyCooldown }} second{{ notifyCooldown === 1 ? '' : 's' }}
           </span>
         </div>
         <div class="modal-actions">
-          <div class="action-group" v-if="!smsConfigured || smsFailed">
+          <div class="action-group">
             <button
               @click="sendNotification(modalEntryId!, 'notify', 'tableReady')"
               class="btn-notify"
-              :disabled="notifyCooldown > 0 || smsCooldown > 0"
+              :disabled="notifyCooldown > 0"
               type="button"
             >
-              Send notification
-            </button>
-          </div>
-          <div class="action-group" v-if="smsConfigured && !smsFailed">
-            <button
-              @click="sendNotification(modalEntryId!, 'sms', 'tableReady')"
-              class="btn-notify"
-              :disabled="notifyCooldown > 0 || smsCooldown > 0"
-              type="button"
-            >
-              Send SMS
+              Table Ready
             </button>
           </div>
           <button @click="guestArrived(modalEntryId!)" class="btn-notify" type="button">Guest has arrived</button>
@@ -145,6 +128,8 @@ import { formatTime } from '@/utils/dateFormatter'
 import { formatPhoneNumber, phoneLink } from '@/utils/phoneFormatter'
 import { toDataURL } from 'qrcode'
 import { useWaitlistSse } from '@/composables/useWaitlistSse'
+import { f } from 'vue-router/dist/router-CWoNjPRp.mjs'
+import { json } from 'node:stream/consumers'
 
 const store = useStore()
 const user = computed(() => store.getters.user)
@@ -154,11 +139,6 @@ const qrCodeUrl = ref('')
 
 const waitlistEnabled = ref(false)
 const waitlistActive = computed(() => status.value?.enabled && status.value?.open)
-
-// helper to know if SMS feature is editable
-const smsConfigured = computed(() => !!user.value?.account?.twilioAccountSid)
-const smsFailed = ref(false)
-const smsEnabled = computed(() => !!user.value?.account?.smsEnabled && !smsFailed.value)
 
 // helper: convert service-hours string to a value suitable for <input type="time"> (HH:mm)
 function normalizeTimeForInput(val: string | undefined): string {
@@ -224,21 +204,13 @@ const disableDialogVisible = ref(false)
 
 // cooldown state for notification buttons (seconds remaining)
 const notifyCooldown = ref(0)
-const smsCooldown = ref(0)
 let notifyTimer: number | null = null
-let smsTimer: number | null = null
 
 // clear timer vars when their cooldown drops to zero
 watch(notifyCooldown, (n) => {
   if (n <= 0 && notifyTimer) {
     clearInterval(notifyTimer)
     notifyTimer = null
-  }
-})
-watch(smsCooldown, (n) => {
-  if (n <= 0 && smsTimer) {
-    clearInterval(smsTimer)
-    smsTimer = null
   }
 })
 
@@ -274,26 +246,20 @@ function openNotifyModal(code: string) {
   modalVisible.value = true
 }
 
-async function sendNotification(id: string, type: 'sms' | 'notify' = 'notify', message: string = 'tableReady') {
+async function sendNotification(id: string, type: string = 'notify', message: string = 'tableReady') {
   try {
     const resp = await api.post(`/entries/${id}/notify`, { type, message })
     await throwIfNotOk(resp)
-    import('@/utils/notify').then(({ success }) => success('Notification sent', { timeout: 2000 }))
-    // start cooldown regardless of previous state
-    switch (type) {
-      case 'sms':
-        if (smsTimer) {
-          clearInterval(smsTimer)
-        }
-        smsTimer = startCooldown(smsCooldown)
-        break
-      case 'notify':
-      default:
-         if (notifyTimer) {
-          clearInterval(notifyTimer)
-        }
-        notifyTimer = startCooldown(notifyCooldown)
-        break
+    if (resp.status === 200 || resp.status === 204) {
+      import('@/utils/notify').then(({ success }) => success('Notification sent', { timeout: 2000 }))
+      if (notifyTimer) {
+        clearInterval(notifyTimer)
+      }
+      notifyTimer = startCooldown(notifyCooldown)
+    } else {
+      const respData = await resp.json()
+      const errorMsg = resp.status === 500 ? `Cannot send notification: ${respData.message}` : 'Failed to send notification'
+      notifyError(errorMsg, { timeout: false })
     }
   } catch (err) {
     import('@/utils/notify').then(({ error }) => error('Failed to send notification', { timeout: false }))
@@ -317,14 +283,9 @@ function closeModal() {
   modalEntry.value = null
   // clear any in‑progress cooldowns so the next time the modal opens the buttons are enabled
   notifyCooldown.value = 0
-  smsCooldown.value = 0
   if (notifyTimer) {
     clearInterval(notifyTimer)
     notifyTimer = null
-  }
-  if (smsTimer) {
-    clearInterval(smsTimer)
-    smsTimer = null
   }
 }
 
@@ -491,7 +452,6 @@ watch(() => user.value?.account?.code, updateQRCode, { immediate: true })
 onUnmounted(() => {
   stopSse()
   if (notifyTimer) clearInterval(notifyTimer)
-  if (smsTimer) clearInterval(smsTimer)
 })
 </script>
 

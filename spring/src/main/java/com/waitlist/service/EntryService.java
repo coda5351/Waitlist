@@ -1,9 +1,9 @@
 package com.waitlist.service;
 
-import com.twilio.exception.ApiException;
 import com.waitlist.exception.ResourceNotFoundException;
 import com.waitlist.model.Entry;
 import com.waitlist.model.EntrySource;
+import com.waitlist.model.EventName;
 import com.waitlist.dto.EntryDTO;
 import com.waitlist.repository.EntryRepository;
 
@@ -13,22 +13,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class EntryService {
 
     private static final Logger logger = LoggerFactory.getLogger(EntryService.class);
-    
+
     @Autowired
     private EntryRepository entryRepository;
 
 
     @Autowired
-    private SmsService smsService;
+    private NotificationService notificationService;
 
     @Autowired
-    private FirebaseService firebaseService;
+    private SmsService smsService;
 
     @Autowired
     private org.springframework.core.env.Environment environment;
@@ -38,10 +39,6 @@ public class EntryService {
 
     @org.springframework.beans.factory.annotation.Value("${twilio.use-dev-number:false}")
     private boolean useDevNumber;
-
-    // base URL for the frontend application, used in SMS templates
-    @org.springframework.beans.factory.annotation.Value("${app.frontend.url:http://localhost:5173}")
-    private String frontendUrl;
 
     /**
      * Estimate total wait time (minutes) based on current queue.
@@ -75,7 +72,6 @@ public class EntryService {
     private AccountService accountService;
 
     public Entry create(String code, Entry entry) {
-        // ensure the waitlist is currently enabled/open; use primary account (id=1)
         if (!accountService.isWaitlistOpen(accountService.getAccountByCode(code).getId())) {
             throw new com.waitlist.exception.WaitlistDisabledException();
         }
@@ -87,75 +83,17 @@ public class EntryService {
             entry.setSource(EntrySource.WEB);
         }
         Entry saved = entryRepository.save(entry);
-        if (entry.getAccount().isSmsEnabled() && entry.getAccount().getTwilioAccountSid() != null && entry.getAccount().getTwilioAuthToken() != null) {
-            notifyOfTableSms(entry, code, MessageTemplate.NEW_ENTRY);
-        } 
+        
+        Map<String, Object> notificationResponse = notificationService.sendFormattedNotification(entry, EventName.NEW_ENTRY);
+        if (notificationResponse.get("success") instanceof Boolean && !(Boolean) notificationResponse.get("success")) {
+            logger.warn("Failed to send notification for new entry {}: {}", saved.getId(), notificationResponse.get("message"));
+        }
+
         return saved;
     }
-
-    public void notifyOfTableSms(Entry entry, String entryCode, MessageTemplate templateType) {
-        if (entry == null) {
-            try {
-                entry = resolve(entryCode);
-            } catch (ResourceNotFoundException e) {
-                throw new ResourceNotFoundException("Cannot send notification: entry not found for code " + entryCode);
-            }
-        }
-        long accountId = entry.getAccount().getId();
-        if (!accountService.isWaitlistOpen(accountId)) {
-            throw new com.waitlist.exception.WaitlistDisabledException();
-        }
-
-        try {
-            if (entry.getPhone() != null && !entry.getPhone().isBlank()) {
-                String to = entry.getPhone();
-                if (isDevProfile() && useDevNumber && devTarget != null && !devTarget.isBlank()) {
-                    to = devTarget;
-                }
-                String template = accountService.getMessageTemplate(accountId, templateType.getKey());
-                if (template == null) {
-                    template = templateType.getDefaultTemplate();
-                }
-                switch (templateType.getKey()) {
-                    case "tableReady":
-                        String tableReadyMsgString = String.format(template,
-                        entry.getName(),
-                        entry.getName(),
-                        entry.getPhone(),
-                        entry.getPartySize());
-                        if (entry.getFirebaseAccessToken() != null && !entry.getFirebaseAccessToken().isBlank()) {
-                            boolean sent = firebaseService.sendTableReadyNotification(entry.getFirebaseAccessToken(), tableReadyMsgString);
-                            if (!sent) {
-                                smsService.sendSms(accountId, to, tableReadyMsgString);
-                            }
-                        } else {
-                            smsService.sendSms(accountId, to, tableReadyMsgString);
-                        }
-                        break;
-                    case "newEntry":
-                        String newEntryMsgString = String.format(template,
-                        entry.getName(),
-                        frontendUrl + "/waitlist/view",
-                        entry.getCode(),
-                        entry.getName(),
-                        entry.getPhone(),
-                        entry.getPartySize());
-                        smsService.sendSms(accountId, to, newEntryMsgString);
-                        break;
-                    default:
-                        logger.warn("Unknown message template type: {}", templateType.getKey());
-                }
-            }
-        } catch (ApiException e) {
-            logger.error("Failed to send SMS notification for table ready: {}", e.getMessage());
-        }
-    }
-
+    
     /**
      * Delete an entry from the waitlist.
-     */
-    /**
-     * Delete an entry from the waitlist by code.
      */
     public Entry deleteEntry(String code) {
         Entry entry = resolve(code);

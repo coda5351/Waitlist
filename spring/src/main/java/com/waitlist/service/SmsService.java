@@ -5,6 +5,8 @@ import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
 import com.waitlist.model.Account;
 
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -34,23 +36,41 @@ public class SmsService {
     /**
      * Sends a message using credentials stored on the given account.
      */
-    public void sendSms(Long accountId, String to, String body) {
+    public Map<String, Object> sendSms(Long accountId, String to, String body) {
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("success", true);
+
         Account acct = accountService.getAccountById(accountId);
         if (!acct.isSmsEnabled()) {
             // do not call external API when disabled; just log for diagnostic purposes
             logger.info("SMS disabled for account {} - would have sent to {} with body: {}", accountId, to, body);
-            return;
+            response.put("success", false);
+            response.put("message", "SMS is disabled for this account; cannot send notification");
+            return response;
         }
 
         String accountSid = acct.getTwilioAccountSid();
         // use raw accessor to retrieve real token (masked getter is for JSON only)
         String authToken = acct.getRawTwilioAuthToken();
         if (accountSid == null || accountSid.isBlank() || authToken == null || authToken.isBlank()) {
-            throw new IllegalStateException("Twilio credentials are not configured for account " + accountId);
+            response.replace("success", false);
+            response.put("message", "Twilio credentials are not configured for this account; cannot send notification");
         } else {
             Twilio.init(accountSid, authToken);
-            Message.creator(new PhoneNumber(to), new PhoneNumber(fromNumber), body).create();
+            Message m = Message.creator(new PhoneNumber(to), new PhoneNumber(fromNumber), body).create();
+            if (m == null) {
+                logger.error("Failed to send SMS to {}: Twilio response is null", to);
+                response.put("success", false);
+                response.put("message", "Failed to send SMS: Twilio response is null");
+            } else if (m.getErrorCode() == null) {
+                logger.info("Sent SMS to {} with body: {}", to, body);
+            } else {
+                logger.error("Failed to send SMS to {}: {} - {}", to, m.getErrorCode(), m.getErrorMessage());
+                response.put("success", false);
+                response.put("message", "Failed to send SMS: " + m.getErrorMessage());
+            }   
         }
+        return response;
     }
 
     /**
