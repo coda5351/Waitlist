@@ -67,10 +67,6 @@ vue/                        # frontend application (Vue 3 + Vite)
 - The frontend uses scoped CSS occasionally with `:deep()` for deep selectors.
 - Test classes are located under `spring/src/test/java`.
 
-## Notes
-
-The repository includes a standalone `Entry.java` (likely from earlier experiments). The core application is under `spring/` and `vue/`.
-
 ### Dev email testing
 
 The backend is configured to send mail using Spring's `JavaMailSender`. When the `dev` profile is active the application points at a local SMTP server. We recommend using **smtp4dev** (https://github.com/rnwood/smtp4dev) to inspect outgoing messages:
@@ -85,4 +81,25 @@ The backend is configured to send mail using Spring's `JavaMailSender`. When the
 
 In production you'll want to supply real SMTP credentials in `application-prod.properties` or via environment variables.
 
-Feel free to extend this README with setup instructions, architectural diagrams, and deployment guides as the project evolves.
+## Firebase configuration
+
+The backend uses Firebase only for push notifications (FCM) and not for authentication. The application expects the service account JSON key file to be present at `spring/src/main/resources/firebase-adminsdk.json`.
+
+1. Create a Firebase project in the Firebase console.
+2. Enable Cloud Messaging for your project.
+3. Download a service account JSON file from Project Settings > Service accounts.
+4. Save it to `spring/src/main/resources/firebase-adminsdk.json`
+
+### Optional Firebase properties (environment variables)
+
+The app can still read optional Firebase settings from environment variables, which are mapped in `spring/src/main/resources/application.properties`.
+
+- `FIREBASE_API_KEY` → `firebase.apiKey`
+- `FIREBASE_APP_ID` → `firebase.appId`
+- `FIREBASE_MESSAGING_SENDER_ID` → `firebase.messagingSenderId`
+- `FIREBASE_PROJECT_ID` → `firebase.projectId`
+- `FIREBASE_STORAGE_BUCKET` → `firebase.storageBucket`
+
+> Warning: never commit service account JSONs or secret keys into source control. Keep them in secure vaults or environment secrets.
+
+> Warning: never commit service account JSONs or secret keys into source control. Keep them in secure vaults or environment secrets.
