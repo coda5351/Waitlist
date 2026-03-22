@@ -5,6 +5,7 @@ import com.google.firebase.FirebaseOptions;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
+import com.waitlist.model.EventName;
 import com.google.auth.oauth2.GoogleCredentials;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,10 +28,7 @@ public class FirebaseService {
     private boolean initialized;
 
     public FirebaseService(@Value("${firebase.service-account-json:}") String serviceAccountJson) {
-        // Allow overriding via a local secret.properties file outside of source control.
-        if (serviceAccountJson == null || serviceAccountJson.isBlank()) {
-            serviceAccountJson = loadServiceAccountJsonFromSecretFile();
-        }
+        serviceAccountJson = loadRawFileContent("firebase-adminsdk.json");
 
         if (serviceAccountJson == null || serviceAccountJson.isBlank()) {
             logger.warn("Firebase service account JSON is not configured; push notifications will be disabled");
@@ -50,71 +48,35 @@ public class FirebaseService {
         }
     }
 
-    private String loadServiceAccountJsonFromSecretFile() {
-        // First, look for a properties file that may contain the JSON.
-        String value = loadPropertyFromFiles("secret.properties", ".." + java.io.File.separator + "secret.properties", "secret.properties");
-        if (value != null && !value.isBlank()) {
-            return value;
+    private String loadRawFileContent(String filePath) {
+        java.nio.file.Path path = java.nio.file.Paths.get(filePath);
+        if (!java.nio.file.Files.exists(path)) {
+            logger.warn("File not found: {}", path);
+            return null;
         }
-
-        // Fall back to looking for the service account JSON file directly.
-        value = loadRawFileContent("firebase-adminsdk.json", ".." + java.io.File.separator + "firebase-adminsdk.json", "firebase-adminsdk.json");
-        if (value != null && !value.isBlank()) {
-            return value;
+        try {
+            logger.info("Loading Firebase service account JSON directly from {}", path);
+            return java.nio.file.Files.readString(path, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            logger.warn("Failed to load {}", path, e);
         }
-
-        return null;
-    }
-
-    private String loadPropertyFromFiles(String... paths) {
-        java.util.Properties props = new java.util.Properties();
-        for (String p : paths) {
-            java.nio.file.Path path = java.nio.file.Paths.get(p);
-            if (!java.nio.file.Files.exists(path)) {
-                continue;
-            }
-            try (java.io.InputStream in = java.nio.file.Files.newInputStream(path)) {
-                props.load(in);
-                String value = props.getProperty("firebase.service-account-json");
-                if (value != null && !value.isBlank()) {
-                    logger.info("Loaded Firebase service account JSON from {}", path);
-                    return value;
-                }
-            } catch (Exception e) {
-                logger.warn("Failed to load {}", path, e);
-            }
-        }
-        return null;
-    }
-
-    private String loadRawFileContent(String... paths) {
-        for (String p : paths) {
-            java.nio.file.Path path = java.nio.file.Paths.get(p);
-            if (!java.nio.file.Files.exists(path)) {
-                continue;
-            }
-            try {
-                logger.info("Loading Firebase service account JSON directly from {}", path);
-                return java.nio.file.Files.readString(path, StandardCharsets.UTF_8);
-            } catch (Exception e) {
-                logger.warn("Failed to load {}", path, e);
-            }
-        }
+    
         return null;
     }
 
     /**
-     * Sends a simple notification to a single device token.
-     * <p>
      * Returns true if the message was accepted by the Firebase service.
+     * @param eventName the type of event triggering the notification, used to determine title and default message if messageBody is not provided
+     * @param deviceToken the target device token to send the notification to
+     * @param messageBody optional custom message body to override the default message for the event type
      */
-    public boolean sendTableReadyNotification(String deviceToken, String messageBody) {
+    public boolean sendFirebaseNotification(EventName eventName, String deviceToken, String messageBody) {
         if (!initialized) {
-            logger.error("sendTableReadyNotification: Firebase is not initialized");
+            logger.error("sendFirebaseNotification: Firebase is not initialized");
             return false;
         }
         if (deviceToken == null || deviceToken.isBlank()) {
-            logger.error("sendTableReadyNotification: Device token is {}; cannot send Firebase notification", deviceToken == null ? "null" : "blank");
+            logger.error("sendFirebaseNotification: Device token is {}; cannot send Firebase notification", deviceToken == null ? "null" : "blank");
             return false;
         }
 
@@ -122,17 +84,17 @@ public class FirebaseService {
             Message message = Message.builder()
                     .setToken(deviceToken)
                     .setNotification(Notification.builder()
-                            .setTitle("Your table is ready")
-                            .setBody(messageBody)
+                            .setTitle(eventName.getTitle())
+                            .setBody(messageBody != null ? messageBody : eventName.getMessage())
                             .build())
                     .build();
 
-            logger.info("sendTableReadyNotification: Sending Firebase notification to token {}: {}", deviceToken, messageBody);
+            logger.info("sendFirebaseNotification: Sending Firebase notification to token {}: {}", deviceToken, messageBody);
             String response = FirebaseMessaging.getInstance().send(message);
-            logger.info("sendTableReadyNotification: Firebase notification sent successfully: {}", response);
+            logger.info("sendFirebaseNotification: Firebase notification sent successfully: {}", response);
             return true;
         } catch (Exception e) {
-            logger.error("sendTableReadyNotification: Failed to send Firebase notification", e);
+            logger.error("sendFirebaseNotification: Failed to send Firebase notification", e);
             return false;
         }
     }

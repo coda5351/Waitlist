@@ -2,7 +2,9 @@ package com.waitlist.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.waitlist.model.Entry;
+import com.waitlist.model.EntrySource;
 import com.waitlist.service.EntryService;
+import com.waitlist.service.NotificationService;
 import com.twilio.exception.ApiException;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -46,6 +48,9 @@ public class EntryControllerTest {
     @MockBean
     private EntryService entryService;
 
+    @MockBean
+    private NotificationService notificationService;
+
     // security support
     @MockBean
     private com.waitlist.security.JwtTokenProvider jwtTokenProvider;
@@ -69,12 +74,15 @@ public class EntryControllerTest {
             f.set(a, 2L);
         } catch (Exception ignored) {}
         when(entryService.create(anyString(), any(com.waitlist.model.Entry.class))).thenReturn(a);
+        when(entryService.resolveFailOk(anyString())).thenReturn(a);
+
         // ensure conversion to DTO returns values matching the entry
         when(entryService.toDto(any())).thenAnswer(inv -> {
             com.waitlist.model.Entry ent = inv.getArgument(0);
             com.waitlist.dto.EntryDTO dto = new com.waitlist.dto.EntryDTO();
             dto.setId(ent.getId());
             dto.setCode(ent.getCode());
+            dto.setAccountId(ent.getAccount() != null ? ent.getAccount().getId() : null);
             return dto;
         });
         when(entryService.getAllActiveEntriesForAccount(anyLong())).thenReturn(java.util.Collections.emptyList());
@@ -95,11 +103,17 @@ public class EntryControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Waitlist is disabled"));
 
-        // notify endpoint (service call was removed)
+        // notify endpoint now uses resolve() and sendFormattedNotification and must be stubbed
+        when(entryService.resolve(anyString())).thenReturn(a);
+        when(notificationService.sendFormattedNotification(any(com.waitlist.model.Entry.class), eq(com.waitlist.model.EventName.NOTIFIED_ENTRY)))
+                .thenReturn(java.util.Map.of("success", true));
+
         mockMvc.perform(post("/api/entries/abc123/notify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk());
+
+        verify(notificationService).sendFormattedNotification(eq(a), eq(com.waitlist.model.EventName.NOTIFIED_ENTRY));
 
         // delete path should accept any string, numeric or code; service is stubbed to return an Entry
         Entry deleted = a;
@@ -152,11 +166,13 @@ public class EntryControllerTest {
             f.set(a, 2L);
         } catch (Exception ignored) {}
         when(entryService.create(anyString(), any(com.waitlist.model.Entry.class))).thenReturn(a);
+        when(entryService.resolveFailOk(anyString())).thenReturn(a);
         when(entryService.toDto(any())).thenAnswer(inv -> {
             com.waitlist.model.Entry ent = inv.getArgument(0);
             com.waitlist.dto.EntryDTO dto = new com.waitlist.dto.EntryDTO();
             dto.setId(ent.getId());
             dto.setCode(ent.getCode());
+            dto.setAccountId(ent.getAccount() != null ? ent.getAccount().getId() : null);
             return dto;
         });
         when(entryService.calculateEstimatedWaitMinutes(anyList())).thenReturn(99);
@@ -182,6 +198,15 @@ public class EntryControllerTest {
         acct.setId(1L);
         a.setAccount(acct);
         when(entryService.deleteEntry(anyString())).thenReturn(a);
+        when(entryService.resolveFailOk(eq("xyz123"))).thenReturn(a);
+        when(entryService.toDto(any())).thenAnswer(inv -> {
+            com.waitlist.model.Entry ent = inv.getArgument(0);
+            com.waitlist.dto.EntryDTO dto = new com.waitlist.dto.EntryDTO();
+            dto.setId(ent.getId());
+            dto.setCode(ent.getCode());
+            dto.setAccountId(ent.getAccount() != null ? ent.getAccount().getId() : null);
+            return dto;
+        });
         when(entryService.calculateEstimatedWaitMinutes(anyList())).thenReturn(7);
         when(entryService.getAllActiveEntriesForAccount(anyLong())).thenReturn(java.util.Collections.emptyList());
 
@@ -211,17 +236,35 @@ public class EntryControllerTest {
     }
 
     @Test
-    public void notifyEntry_emitsNotifiedEvent() throws Exception {
+    public void notifyEntry_emitsNotifiedEvent_andTriggersNotification() throws Exception {
         // register a mock emitter to capture sends
         SseEmitter mockEmitter = Mockito.mock(SseEmitter.class);
         EntryController ctrl = this.applicationContext.getBean(EntryController.class);
         ctrl.emitters.add(mockEmitter);
 
+        Entry entry = new Entry("C", "333", 3);
+        entry.setCode("xyz789");
+        entry.setSource(EntrySource.WEB);
+        com.waitlist.model.Account acct = new com.waitlist.model.Account("foo", null);
+        acct.setId(1L);
+        acct.setSmsEnabled(true);
+        entry.setAccount(acct);
+        entry.setPhone("(555) 123-4567");
+
+        when(entryService.resolve(eq("xyz789"))).thenReturn(entry);
+        when(entryService.resolveFailOk(eq("xyz789"))).thenReturn(entry);
+        when(entryService.getAllActiveEntriesForAccount(eq(1L))).thenReturn(java.util.Collections.emptyList());
+        when(notificationService.sendFormattedNotification(eq(entry), eq(com.waitlist.model.EventName.NOTIFIED_ENTRY)))
+                .thenReturn(java.util.Map.of("success", true));
         mockMvc.perform(post("/api/entries/xyz789/notify")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+                        .content("{\"type\":\"sms\",\"message\":\"tableReady\"}"))
                 .andExpect(status().isOk());
-        // verify emitter.send was invoked with any builder
+
+        // verify SSE send as before
         verify(mockEmitter).send(Mockito.any(SseEmitter.SseEventBuilder.class));
+
+        // verify notification path was triggered
+        verify(notificationService).sendFormattedNotification(eq(entry), eq(com.waitlist.model.EventName.NOTIFIED_ENTRY));
     }
 }

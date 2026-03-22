@@ -2,9 +2,10 @@ package com.waitlist.controller;
 
 import com.twilio.exception.ApiException;
 import com.waitlist.model.Entry;
+import com.waitlist.model.EventName;
 import com.waitlist.dto.EntryDTO;
 import com.waitlist.service.EntryService;
-import com.waitlist.service.MessageTemplate;
+import com.waitlist.service.NotificationService;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -26,38 +27,11 @@ public class EntryController {
 
     private static final Logger logger = LoggerFactory.getLogger(EntryController.class);
 
-    private enum EventName {
-        NEW_ENTRY("new-entry"),
-        DELETED_ENTRY("deleted-entry"),
-        UPDATED_ENTRY("updated-entry"),
-        NOTIFIED_ENTRY("notified-entry"),
-        WAITLIST_DISABLED("waitlist-disabled");
-
-        private final String value;
-
-        EventName(String value) {
-            this.value = value;
-        }
-
-        public String getValue() {
-            return value;
-        }
-
-        /**
-         * Determine whether the provided value matches a known event name.
-         */
-        public static boolean isValid(String value) {
-            for (EventName e : values()) {
-                if (e.value.equals(value)) {
-                    return true;
-                }
-            }
-            throw new IllegalArgumentException("Unsupported event name: " + value);
-        }
-    }
-
     @Autowired
     private EntryService entryService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     // list of active Server-Sent Event emitters; CopyOnWriteArrayList makes concurrent
     // modifications safe and we remove dead emitters as they timeout or complete.
@@ -87,14 +61,26 @@ public class EntryController {
         emitters.removeAll(dead);
     }
 
-    private void emitToEntry(String entryCode, EventName eventName, String message, String subMessage) {
-        EntryDTO dto = entryService.toDto(entryService.resolveFailOk(entryCode));
+    private void emitToEntry(String entryCode, EventName eventName) {
+        emitToEntry(entryCode, eventName, null);
+    }
+
+    private void emitToEntry(String entryCode, EventName eventName, String message) {
+        com.waitlist.model.Entry entry = entryService.resolveFailOk(entryCode);
+        EntryDTO dto = (entry != null) ? entryService.toDto(entry) : null;
+
+        Long accountId = (dto != null) ? dto.getAccountId() : null;
+        int wait = 0;
+        if (accountId != null) {
+            wait = entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(accountId));
+        }
+
         Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("entry", dto);
-        payload.put("estimatedWait", entryService.calculateEstimatedWaitMinutes(entryService.getAllActiveEntriesForAccount(dto.getAccountId())));
+        payload.put("estimatedWait", wait);
         payload.put("eventName", eventName.getValue());
-        if (message != null) payload.put("message", message);
-        if (subMessage != null) payload.put("subMessage", subMessage);
+        payload.put("message", (message != null) ? message : eventName.getMessage());
+        payload.put("subMessage", eventName.getSubMessage());
         sendEvent(eventName, payload);
     }
 
@@ -102,13 +88,7 @@ public class EntryController {
      * Notify clients that the entire waitlist has been disabled (closed).
      */
     public void emitWaitlistDisabled() {
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
-        payload.put("entry", null);
-        payload.put("estimatedWait", 0);
-        payload.put("eventName", EventName.WAITLIST_DISABLED.getValue());
-        payload.put("message", "The waitlist has been closed by the host.");
-        payload.put("subMessage", "Hope to see you again when we reopen!");
-        sendEvent(EventName.WAITLIST_DISABLED, payload);
+        emitToEntry(null, EventName.WAITLIST_DISABLED);
     }
 
     /**
@@ -128,28 +108,22 @@ public class EntryController {
     public ResponseEntity<EntryDTO> createEntry(@PathVariable String code, @RequestBody Entry entry) {
         Entry saved = entryService.create(code, entry);
         // push update so clients can append the new entry without polling
-        emitToEntry(saved.getCode(), EventName.NEW_ENTRY, null, null);
+        emitToEntry(saved.getCode(), EventName.NEW_ENTRY);
         return ResponseEntity.ok(entryService.toDto(saved));
     }
 
     @PostMapping("/{code}/notify")
-    public ResponseEntity<Void> notifyEntry(@PathVariable String code, @RequestBody Map<String,String> req) {
+    public ResponseEntity<Map<String, Object>> notifyEntry(@PathVariable String code, @RequestBody Map<String,String> req) {
+        emitToEntry(code, EventName.NOTIFIED_ENTRY);
 
-        // Here we lay the ground work but this could serve to notify of other events as well (e.g. reservation confirmed, table ready, etc.) 
-        // by including a "type" field in the request and switching on that to determine the message template and whether to send an SMS or just a
-        // generic notification for the front end to handle (e.g. show a popup).  
-        // For now we only have the one "tableReady" type which sends an SMS using the existing notifyOfTableSms method but we can expand this 
-        // in the future as needed.
-        if(
-            req.containsKey("type") && req.get("type").equals("sms") && 
-            req.containsKey("message") && req.get("message").equals("tableReady")
-        ) {
-            // send a generic notification (e.g. for front end to show a popup) without sending an SMS
-            entryService.notifyOfTableSms(null, code, MessageTemplate.TABLE_READY);
+        Entry entry = entryService.resolve(code);
+        Map<String, Object> response = notificationService.sendFormattedNotification(entry, EventName.NOTIFIED_ENTRY);
+
+        if (response.get("success") instanceof Boolean && (Boolean) response.get("success")) { 
+            return ResponseEntity.ok().build();
+        } else {
+            return ResponseEntity.status(500).body(response);
         }
-        // notify listening clients that this entry has been called
-        emitToEntry(code, EventName.NOTIFIED_ENTRY, "Your table is ready -- please proceed to the host stand.", null);
-        return ResponseEntity.ok().build();
     }
 
     /**
@@ -161,22 +135,21 @@ public class EntryController {
         String message = req.getOrDefault("message", "");
         entryService.sendSmsToEntry(code, message);
         // notify listening clients that this entry has been contacted via SMS
-        emitToEntry(code, EventName.NOTIFIED_ENTRY, message, null);
+        emitToEntry(code, EventName.NOTIFIED_ENTRY, message);
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{code}")
     public ResponseEntity<Map<String, Object>> deleteEntry(@PathVariable String code) {
-        String message = "You have been removed from the waitlist.";
-        String subMessage = "If you were recently called, please contact the host. Otherwise, feel free to join again!";
-        emitToEntry(code, EventName.DELETED_ENTRY, message, subMessage);
+        emitToEntry(code, EventName.DELETED_ENTRY);
+
         Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("entry", null);
         payload.put("code", code);
         payload.put("estimatedWait", 0);
         payload.put("eventName", EventName.DELETED_ENTRY.getValue());
-        payload.put("message", message);
-        payload.put("subMessage", subMessage);
+        payload.put("message", EventName.DELETED_ENTRY.getMessage());
+        payload.put("subMessage", EventName.DELETED_ENTRY.getSubMessage());
         entryService.deleteEntry(code);
         return ResponseEntity.ok(payload);
     }
@@ -185,7 +158,7 @@ public class EntryController {
     public ResponseEntity<EntryDTO> setCalled(@PathVariable String code, @RequestBody Map<String,Boolean> req) {
         boolean called = req.getOrDefault("called", false);
         Entry updated = entryService.markCalled(code, called);
-        emitToEntry(code, EventName.UPDATED_ENTRY, "Your table has already been called or you are not on the list.", "Sign up again to join the wait list.");
+        emitToEntry(code, EventName.UPDATED_ENTRY);
         return ResponseEntity.ok(entryService.toDto(updated));
     }
 

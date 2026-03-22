@@ -24,10 +24,10 @@ public class EntryServiceTest {
 
 
     @Mock
-    private SmsService smsService;
+    private NotificationService notificationService;
 
     @Mock
-    private FirebaseService firebaseService;
+    private SmsService smsService;
 
     @Mock
     private org.springframework.core.env.Environment environment;
@@ -54,7 +54,7 @@ public class EntryServiceTest {
         a.setTimestamp(LocalDateTime.now().minusMinutes(5));
         Entry b = new Entry("B","222",2);
         b.setTimestamp(LocalDateTime.now());
-        when(entryRepository.findAllByAccountIdAndActiveTrue(eq(1L))).thenReturn(Arrays.asList(a,b));
+        when(entryRepository.findAllByAccountIdAndActiveTrueAndCalledFalse(eq(1L))).thenReturn(Arrays.asList(a,b));
 
         List<Entry> result = entryService.getAllActiveEntriesForAccount(1L);
         assertEquals(2, result.size());
@@ -83,11 +83,6 @@ public class EntryServiceTest {
             return e;
         });
         // environment mock should return empty profiles to avoid NPE in isDevProfile
-        when(environment.getActiveProfiles()).thenReturn(new String[0]);
-        // account service should return no custom template by default
-        when(accountService.getMessageTemplate(eq(1L), eq(MessageTemplate.NEW_ENTRY.getKey())))
-                .thenReturn(null);
-
         // set phone number so sms notification will be sent
         in.setPhone("1234567890");
 
@@ -96,8 +91,8 @@ public class EntryServiceTest {
         assertNotNull(out.getId());
         assertNotNull(out.getCode());
         assertEquals("X", out.getName());
-        // verify sms sent instead of email (account id 1 used)
-        verify(smsService).sendSms(eq(1L), eq("1234567890"), contains("Thank you for joining"));
+        // verify notification utility was invoked using the new formatted path
+        verify(notificationService).sendFormattedNotification(eq(in), eq(com.waitlist.model.EventName.NEW_ENTRY));
     }
 
     @Test
@@ -138,14 +133,10 @@ public class EntryServiceTest {
             } catch (Exception ignored) {}
             return e;
         });
-        when(environment.getActiveProfiles()).thenReturn(new String[0]);
-        // supply a simple template; first argument will be name only
-        when(accountService.getMessageTemplate(eq(1L), eq(MessageTemplate.NEW_ENTRY.getKey())))
-                .thenReturn("Hi %s, welcome!");
         in.setPhone("555");
 
         Entry out = entryService.create("acct", in);
-        verify(smsService).sendSms(eq(1L), eq("555"), eq("Hi Custom, welcome!"));
+        verify(notificationService).sendFormattedNotification(eq(in), eq(com.waitlist.model.EventName.NEW_ENTRY));
     }
     @Test
     public void getById_notFound() {
@@ -230,48 +221,6 @@ public class EntryServiceTest {
         // only code path exercised now
         entryService.sendSmsToEntry("c40", "Another");
         verify(smsService).sendSms(eq(1L), eq("12345"), eq("Another"));
-    }
-
-    @Test
-    public void notifyOfTableSms_usesFirebaseWhenTokenPresent() {
-        Entry e = new Entry("F","333",2);
-        e.setCode("c72");
-        e.setFirebaseAccessToken("token123");
-        com.waitlist.model.Account acct = new com.waitlist.model.Account("foo", null);
-        acct.setId(1L);
-        e.setAccount(acct);
-
-        when(accountService.isWaitlistOpen(anyLong())).thenReturn(true);
-        when(entryRepository.findByCodeAndActiveTrue(anyString())).thenReturn(Optional.of(e));
-        when(accountService.getMessageTemplate(eq(1L), eq(MessageTemplate.TABLE_READY.getKey()))).thenReturn(null);
-        when(environment.getActiveProfiles()).thenReturn(new String[0]);
-        when(firebaseService.sendTableReadyNotification(eq("token123"), anyString())).thenReturn(true);
-
-        entryService.notifyOfTableSms(e, null, MessageTemplate.TABLE_READY);
-
-        verify(firebaseService).sendTableReadyNotification(eq("token123"), contains("Your table is ready"));
-        verifyNoInteractions(smsService);
-    }
-
-    @Test
-    public void notifyOfTableSms_fallsBackToSms_whenFirebaseFails() {
-        Entry e = new Entry("G","444",3);
-        e.setCode("c73");
-        e.setFirebaseAccessToken("token456");
-        com.waitlist.model.Account acct = new com.waitlist.model.Account("foo", null);
-        acct.setId(1L);
-        e.setAccount(acct);
-
-        when(accountService.isWaitlistOpen(anyLong())).thenReturn(true);
-        when(entryRepository.findByCodeAndActiveTrue(anyString())).thenReturn(Optional.of(e));
-        when(accountService.getMessageTemplate(eq(1L), eq(MessageTemplate.TABLE_READY.getKey()))).thenReturn(null);
-        when(environment.getActiveProfiles()).thenReturn(new String[0]);
-        when(firebaseService.sendTableReadyNotification(eq("token456"), anyString())).thenReturn(false);
-
-        entryService.notifyOfTableSms(e, null, MessageTemplate.TABLE_READY);
-
-        verify(firebaseService).sendTableReadyNotification(eq("token456"), contains("Your table is ready"));
-        verify(smsService).sendSms(eq(1L), anyString(), contains("Your table is ready"));
     }
 
     @Test

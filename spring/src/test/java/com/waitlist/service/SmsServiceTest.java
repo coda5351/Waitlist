@@ -11,7 +11,8 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -65,7 +66,9 @@ public class SmsServiceTest {
         acct.setTwilioAuthToken(null);
         when(accountService.getAccountById(2L)).thenReturn(acct);
 
-        assertThrows(IllegalStateException.class, () -> smsService.sendSms(2L, "+1000", "msg"));
+        var result = smsService.sendSms(2L, "+1000", "msg");
+        assertFalse((Boolean) result.get("success"));
+        assertTrue(result.get("message").toString().contains("Twilio credentials"));
     }
 
     @Test

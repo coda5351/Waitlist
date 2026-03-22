@@ -6,7 +6,6 @@ import com.waitlist.dto.LoginRequest;
 import com.waitlist.dto.RegisterRequest;
 import com.waitlist.exception.UnauthorizedException;
 import com.waitlist.model.Account;
-import com.waitlist.model.CodeGenerator;
 import com.waitlist.model.User;
 import com.waitlist.repository.AccountRepository;
 import com.waitlist.repository.UserRepository;

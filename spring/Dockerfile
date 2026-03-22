@@ -29,6 +29,8 @@ RUN mvn clean package -Dmaven.test.skip=true
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=backend /app/target/*.jar app.jar
+# include secret.properties so FirebaseService can load local secrets at runtime
+COPY --from=backend /app/src/main/resources/firebase-adminsdk.json ./firebase-adminsdk.json
 
 EXPOSE 8080
 ENTRYPOINT ["java","-jar","app.jar"]
